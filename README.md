@@ -153,6 +153,20 @@ Campos não encontrados permanecem em branco e recebem a observação “Sem …
 
 ---
 
+## Catálogo de peritos (referência)
+
+Para montar um arquivo auxiliar com nome, CPF/CNPJ e especialidade dos peritos encontrados nos ZIPs, rode:
+
+```bash
+python -m seiautomation.offline.build_peritos_catalog \
+  --zip-dir "C:/Users/pichau/Downloads/DE/playwright-downloads" \
+  --output peritos_catalogo.csv
+```
+
+O CSV resultante não é usado automaticamente pela planilha, mas serve como apoio para revisar dados faltantes e checar inconsistências. Você pode reaproveitá-lo em planilhas auxiliares ou em consultas rápidas.
+
+---
+
 ## Execução via Docker
 
 Containerizar o projeto garante que dependências (Playwright, PySide6, backend) fiquem replicáveis.
