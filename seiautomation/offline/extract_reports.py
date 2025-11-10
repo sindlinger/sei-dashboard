@@ -363,8 +363,8 @@ def _extract_percentage(text: str) -> str:
 
 def process_zip(zip_path: Path) -> ExtractionResult:
     sources, combined = gather_texts(zip_path)
-    primary_text = sources[0]["text"] if sources else combined
-    result = extract_from_text(primary_text, combined)
+    text_for_extraction = combined or (sources[0]["text"] if sources else "")
+    result = extract_from_text(text_for_extraction, combined)
     if not sources:
         result.observations.append("Nenhum documento legível no ZIP")
     return result
