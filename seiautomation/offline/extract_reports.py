@@ -81,6 +81,18 @@ COLUMNS = [
 class ExtractionResult:
     data: dict[str, str] = field(default_factory=dict)
     observations: List[str] = field(default_factory=list)
+    sources: dict[str, str] = field(default_factory=dict)
+
+    def update_from(self, other: "ExtractionResult", source_name: str) -> None:
+        for key, value in other.data.items():
+            if not value:
+                continue
+            if not self.data.get(key):
+                self.data[key] = value
+                self.sources[key] = source_name
+        for obs in other.observations:
+            if obs not in self.observations:
+                self.observations.append(obs)
 
     def to_row(self, index: int, zip_name: str) -> list[str]:
         row = []
@@ -130,7 +142,7 @@ def gather_texts(zip_path: Path) -> tuple[list[dict[str, str]], str]:
             else:
                 continue
             sources.append({"name": name, "text": text})
-    sources.sort(key=lambda s: ("despacho" not in s["name"].lower(), 0 if s["name"].lower().endswith(".html") else 1))
+    sources.sort(key=lambda s: _document_priority(s["name"], s["text"]))
     combined = "\n".join(src["text"] for src in sources)
     return sources, combined
 
@@ -363,11 +375,39 @@ def _extract_percentage(text: str) -> str:
 
 def process_zip(zip_path: Path) -> ExtractionResult:
     sources, combined = gather_texts(zip_path)
-    text_for_extraction = combined or (sources[0]["text"] if sources else "")
-    result = extract_from_text(text_for_extraction, combined)
+    result = ExtractionResult()
+    if not sources and not combined:
+        result.observations.append("Nenhum documento legível no ZIP")
+        return result
+
+    for src in sources:
+        partial = extract_from_text(src["text"], combined)
+        result.update_from(partial, src["name"])
+
+    if not result.data.get("PROCESSO Nº") and combined:
+        fallback = extract_from_text(combined, combined)
+        result.update_from(fallback, "combined")
+
     if not sources:
         result.observations.append("Nenhum documento legível no ZIP")
     return result
+
+
+def _document_priority(name: str, text: str) -> tuple[int, int]:
+    name_lower = name.lower()
+    text_lower = text.lower()
+    score = 10
+    if "despacho" in name_lower:
+        score -= 5
+    if "autoriz" in text_lower or "honor" in text_lower:
+        score -= 3
+    if "certidao" in name_lower:
+        score -= 1
+    if "laudo" in name_lower:
+        score -= 2
+    if name_lower.endswith('.html'):
+        score -= 1
+    return score, len(text) * -1
 
 
 def write_excel(rows: list[list[str]], output: Path) -> None:
