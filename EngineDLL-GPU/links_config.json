@@ -1,0 +1,47 @@
+[
+  {
+    "Source": "Dev\\Indicators",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Indicators",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\Experts",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Experts",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\bin",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Libraries",
+    "Type": "Directory"
+  },
+  {
+    "Source": "logs",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Files/WaveSpecGPU/logs",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\Include\\GPU",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Include/GPU",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\Include\\client_ipc",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Include/client_ipc",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\Include\\engine_core",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Include/engine_core",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\Include\\ipc",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Include/ipc",
+    "Type": "Directory"
+  },
+  {
+    "Source": "Dev\\Include\\service",
+    "Target": "C:/Users/pichau/AppData/Roaming/MetaQuotes/Terminal/<GUID>/MQL5/Include/service",
+    "Type": "Directory"
+  }
+]

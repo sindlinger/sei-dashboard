@@ -1,0 +1,13 @@
+README.md
+setup.py
+src/grepo/__init__.py
+src/grepo/__main__.py
+src/grepo/cli.py
+src/grepo/config.py
+src/grepo/core.py
+src/grepo.egg-info/PKG-INFO
+src/grepo.egg-info/SOURCES.txt
+src/grepo.egg-info/dependency_links.txt
+src/grepo.egg-info/entry_points.txt
+src/grepo.egg-info/requires.txt
+src/grepo.egg-info/top_level.txt
