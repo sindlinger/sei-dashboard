@@ -250,7 +250,9 @@ def _extract_perito_info(lines: Sequence[str]) -> PeritoInfo:
     def candidate_lines(predicate):
         return [line for line in lines if predicate(line.lower())]
 
-    preferred = candidate_lines(lambda l: "interessado" in l and "perit" in l)
+    preferred = candidate_lines(lambda l: "interessado" in l)
+    if not preferred:
+        preferred = candidate_lines(lambda l: "interessado" in l and "perit" in l)
     if not preferred:
         preferred = candidate_lines(lambda l: l.startswith("perito") or l.startswith("perita"))
     if not preferred:
