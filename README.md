@@ -135,6 +135,24 @@ Argumentos úteis:
 
 ---
 
+## Extração offline de despachos e geração de Excel
+
+Quando os processos já estiverem baixados em ZIP (ex.: `C:\\Users\\pichau\\Downloads\\DE\\playwright-downloads`), execute:
+
+```bash
+python -m seiautomation.offline.extract_reports \\n  --zip-dir "C:/Users/pichau/Downloads/DE/playwright-downloads" \\n  --output relatorio-pericias.xlsx
+```
+
+O utilitário identifica o documento de despacho (e complementa com PDFs anexos quando necessário) e tenta preencher automaticamente as colunas da planilha:
+
+- nº de perícias (numeração sequencial), datas (requisição, adiantamento, autorização) e processos (administrativo e judicial)
+- juízo, comarca, promovente, promovido, perito, CPF/CNPJ, especialidade, espécie da perícia
+- fator, valores tabelado/arbitrado, checagens e saldo a receber
+
+Campos não encontrados permanecem em branco e recebem a observação “Sem …” para facilitar a revisão manual. Use `--limit 10` para processar apenas alguns ZIPs durante testes.
+
+---
+
 ## Execução via Docker
 
 Containerizar o projeto garante que dependências (Playwright, PySide6, backend) fiquem replicáveis.
