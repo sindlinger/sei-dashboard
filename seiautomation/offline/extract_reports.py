@@ -373,8 +373,17 @@ def write_excel(rows: list[list[str]], output: Path) -> None:
     ws = wb.active
     ws.title = "Pericias"
     ws.append(COLUMNS)
+    pendencias: list[list[str]] = []
+    obs_idx = COLUMNS.index("OBSERVACOES")
     for row in rows:
         ws.append(row)
+        if row[obs_idx]:
+            pendencias.append(row)
+
+    pend = wb.create_sheet("Pendencias")
+    pend.append(COLUMNS)
+    for row in pendencias:
+        pend.append(row)
     wb.save(output)
 
 

@@ -151,6 +151,8 @@ O utilitário identifica o documento de despacho (e complementa com PDFs anexos 
 
 Campos não encontrados permanecem em branco e recebem a observação “Sem …” para facilitar a revisão manual. Use `--limit 10` para processar apenas alguns ZIPs durante testes.
 
+> Referência de valores: a tabela oficial de honorários (área, espécie e valor) está em `docs/tabela_honorarios.csv`, já incluindo o item extra “Laudo grafotécnico” solicitado.
+
 ---
 
 ## Catálogo de peritos (referência)
