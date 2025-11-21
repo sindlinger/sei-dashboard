@@ -5,6 +5,7 @@ AgentsFiles-to-tester_folder_terminals/
 peritos_catalogo.csv
 sample_relatorio.xlsx
 playwright-downloads/
+grepo/
 ml/.venv/
 ml/datasets/
 ml/models/

@@ -1,2 +1,0 @@
-[console_scripts]
-grepo = grepo.cli:main
