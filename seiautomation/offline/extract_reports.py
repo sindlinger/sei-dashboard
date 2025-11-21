@@ -1273,6 +1273,28 @@ def _match_alias(text: str | None) -> dict[str, str] | None:
     return None
 
 
+NOISE_SPECIE_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"^\(\s*\)\s*tradu[cç][aã]o",
+        r"^\(\s*\)\s*interpreta[cç][aã]o",
+        r"^\d{1,2}/\d{1,2}/\d{2,4}",
+        r"^\.$",
+    ]
+]
+
+
+def _clean_especie_candidate(value: str) -> str:
+    if not value:
+        return ""
+    v = value.strip().strip("-–:;.,")
+    # descartar formulários ou lixos triviais
+    for pat in NOISE_SPECIE_PATTERNS:
+        if pat.match(v):
+            return ""
+    return v
+
+
 def _format_currency_value(value: str | float) -> str:
     if isinstance(value, str):
         try:
