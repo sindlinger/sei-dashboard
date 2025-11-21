@@ -8,6 +8,7 @@ import logging
 import re
 import sys
 import unicodedata
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -2132,6 +2133,9 @@ def main() -> None:
             raise SystemExit(f"Diretório não encontrado: {dir_path}")
         txt_paths.extend(sorted(path for path in dir_path.glob("*.txt")))
 
+    total_size = sum(p.stat().st_size for p in zip_paths + pdf_paths + txt_paths)
+    _log(f"Pré-flight ok | ZIPs: {len(zip_paths)} PDFs: {len(pdf_paths)} TXTs: {len(txt_paths)} | Tamanho total: {total_size/1e6:.1f} MB")
+
     total_expected = len(zip_paths) + len(pdf_paths) + len(txt_paths)
 
     loose_paths = pdf_paths + txt_paths
@@ -2173,7 +2177,7 @@ def main() -> None:
 
     checkpoint_interval = max(1, args.checkpoint_interval)
     total_to_process = len(remaining_inputs)
-    _log(f"Processando {total_to_process} arquivo(s) com {args.workers} workers.")
+    _log(f"Lista de trabalho: {total_to_process} arquivo(s) | workers={args.workers} | checkpoint a cada {checkpoint_interval}.")
     _print_header(run_id, log_path, total_to_process)
 
     def consolidate_checkpoint(final: bool = False) -> None:
@@ -2186,6 +2190,7 @@ def main() -> None:
         _log(f"Checkpoint salvo ({len(state_processed)} registros).")
 
     try:
+        t0 = time.time()
         with ProcessPoolExecutor(max_workers=max(1, args.workers)) as executor:
             futures = {
                 executor.submit(
@@ -2205,6 +2210,10 @@ def main() -> None:
                 state_processed.add(name)
                 if completed % checkpoint_interval == 0:
                     consolidate_checkpoint(final=False)
+        elapsed = time.time() - t0
+        mb = total_size / 1e6 if total_size else 0
+        if elapsed > 0 and mb:
+            _log(f"Processamento paralelo concluído: {completed}/{total_to_process} arquivos | {mb/elapsed:.2f} MB/s")
     finally:
         if temp_dir:
             temp_dir.cleanup()
