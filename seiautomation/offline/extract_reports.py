@@ -1894,8 +1894,11 @@ def process_and_save_parquet(zip_name: str, resolved_path: str, parquet_dir: str
     _scrub_perito_conflicts(result)
     pdir = Path(parquet_dir)
     pdir.mkdir(parents=True, exist_ok=True)
+    tmp_path = pdir / f"{zip_name}.parquet.tmp"
+    final_path = pdir / f"{zip_name}.parquet"
     df = pd.DataFrame([result.to_row(0, zip_name)], columns=COLUMNS)
-    df.to_parquet(pdir / f"{zip_name}.parquet", index=False)
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.replace(final_path)
     return zip_name, result
 
 
@@ -1904,7 +1907,17 @@ def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
     files = sorted(parquet_dir.glob("*.parquet"))
     if not files:
         return
-    dfs = [pd.read_parquet(f) for f in files]
+    dfs = []
+    bad_files = []
+    for f in files:
+        try:
+            dfs.append(pd.read_parquet(f))
+        except Exception:
+            bad_files.append(f)
+    if bad_files:
+        _log(f"Aviso: {len(bad_files)} parquet(s) corrompido(s) ignorado(s): {[p.name for p in bad_files]}")
+    if not dfs:
+        return
     df_all = pd.concat(dfs, ignore_index=True)
     # Garante colunas e renumera
     for c in COLUMNS:
