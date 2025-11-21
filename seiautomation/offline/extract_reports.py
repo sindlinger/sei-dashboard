@@ -2430,7 +2430,7 @@ def main() -> None:
     _print_header(run_id, log_path, total_to_process)
 
     def consolidate_checkpoint(final: bool = False) -> None:
-        nonlocal checkpoint_bytes, checkpoint_start
+        nonlocal checkpoint_bytes, checkpoint_start, pending_results
         state["processed_files"] = sorted(state_processed)
         state["last_update"] = datetime.now().isoformat()
         state["completed"] = final
@@ -2439,6 +2439,9 @@ def main() -> None:
         bad = consolidate_parquets(parquet_dir, output)
         if bad:
             bad_files_total.update([p.name for p in bad])
+        if audit_path and pending_results:
+            _append_audit_entries(audit_path, pending_results, run_id)
+            pending_results = []
         elapsed = time.time() - checkpoint_start
         mbps = (checkpoint_bytes / 1e6) / elapsed if elapsed > 0 else 0
         _log(
@@ -2449,6 +2452,7 @@ def main() -> None:
         checkpoint_start = time.time()
 
     bad_files_total: set[str] = set()
+    pending_results: list[tuple[str, ExtractionResult]] = []
 
     first_result_logged = False
 
@@ -2476,6 +2480,7 @@ def main() -> None:
                 _log_progress(completed, total_to_process, name)
                 processed_set.add(name)
                 state_processed.add(name)
+                pending_results.append((name, result))
                 checkpoint_bytes += file_sizes.get(name, 0)
                 if completed % checkpoint_interval == 0:
                     consolidate_checkpoint(final=False)
