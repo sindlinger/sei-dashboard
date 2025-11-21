@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 """
-Pipeline simplificado para executar QA sobre os contextos selecionados.
-Ele foi reimplementado após a recuperação para garantir que o CLI volte a
-funcionar mesmo sem os arquivos originais.
+Pipeline de QA: coleta fontes (ZIPs/PDFs), seleciona contextos e roda o modelo.
+Compatível com o CLI (`python -m qa.run_context_qa`) e com o comando offline `cli qa`.
 """
 
 import argparse
@@ -14,22 +13,25 @@ from typing import Sequence
 
 from qa.match_runner import run_match
 
+DEFAULT_MODEL = "deepset/xlm-roberta-large-squad2"
+
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="QA supervisionado sobre contextos pré-selecionados.")
+    parser = argparse.ArgumentParser(description="QA supervisionado sobre os contextos selecionados.")
     parser.add_argument("--zip", dest="zip", help="ZIP único.")
     parser.add_argument("--zip-dir", dest="zip_dir", help="Diretório com ZIPs.")
     parser.add_argument("--pdf", dest="pdf", help="PDF consolidado único.")
     parser.add_argument("--pdf-dir", dest="pdf_dir", help="Diretório com PDFs avulsos.")
     parser.add_argument("--limit", dest="limit", type=int, help="Limita quantidade de arquivos processados.")
     parser.add_argument("--fields", nargs="*", help="Campos a consultar.")
-    parser.add_argument("--max-per-field", dest="max_per_field", type=int, default=3, help="Contextos por campo.")
+    parser.add_argument("--max-per-field", dest="max_per_field", type=int, default=3, help="Contextos por campo (default=3).")
     parser.add_argument("--min-score", dest="min_score", type=float, default=0.25, help="Score mínimo para aceitar resposta.")
     parser.add_argument("--model-name", dest="model_name", default=None, help="Checkpoint do modelo QA.")
+    # Default = 0 para priorizar GPU quando existir (mantém compatibilidade).
     parser.add_argument("--device", dest="device", type=int, default=0, help="GPU (use -1 para CPU).")
-    parser.add_argument("--batch-size", dest="batch_size", type=int, default=16, help="Lote enviado para o modelo.")
+    parser.add_argument("--batch-size", dest="batch_size", type=int, default=16, help="Tamanho do lote (não usado, mantido por compatibilidade).")
     parser.add_argument("--output", dest="output", default="qa-results.json", help="Arquivo JSON de saída.")
-    parser.add_argument("--verbose", action="store_true", help="Mostra resultados no stdout.")
+    parser.add_argument("--verbose", action="store_true", help="Também imprime o JSON no stdout.")
     return parser.parse_args(argv)
 
 
@@ -45,7 +47,6 @@ def _collect_paths(args: argparse.Namespace) -> tuple[list[Path], list[Path]]:
     if args.pdf_dir:
         pdfs.extend(sorted(Path(args.pdf_dir).glob("*.pdf")))
     if not zips and not pdfs:
-        # fallback: usa diretório padrão de downloads
         default_dir = Path("playwright-downloads")
         zips.extend(sorted(default_dir.glob("*.zip")))
     return zips, pdfs
@@ -54,16 +55,18 @@ def _collect_paths(args: argparse.Namespace) -> tuple[list[Path], list[Path]]:
 def run_context_qa(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     zip_paths, pdf_paths = _collect_paths(args)
+
     if args.limit is not None and args.limit >= 0:
         zip_paths = zip_paths[: args.limit]
-        pdf_paths = pdf_paths[: max(0, args.limit - len(zip_paths))]
+        remaining = max(0, args.limit - len(zip_paths))
+        pdf_paths = pdf_paths[:remaining] if remaining else []
 
-    model_name = args.model_name or "deepset/xlm-roberta-large-squad2"
+    model_name = args.model_name or DEFAULT_MODEL
 
     results = run_match(
         zip_paths=zip_paths,
         pdf_paths=pdf_paths,
-        limit=None,
+        limit=None,  # já aplicado acima
         fields=args.fields,
         device=args.device,
         model_name=model_name,
