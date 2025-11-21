@@ -73,7 +73,7 @@ BUCKET_REQUIREMENTS = _build_bucket_requirements()
 INVALID_EXCEL_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "extract"
 LOGGER = logging.getLogger("extract_reports")
-PHASE_COLOR = "\033[94m"  # azul claro
+PHASE_COLOR = "\033[96m"  # ciano claro (mais ameno)
 RESET_COLOR = "\033[0m"
 
 
@@ -2357,7 +2357,10 @@ def main() -> None:
             bad_files_total.update([p.name for p in bad])
         elapsed = time.time() - checkpoint_start
         mbps = (checkpoint_bytes / 1e6) / elapsed if elapsed > 0 else 0
-        _log(f"Checkpoint salvo ({len(state_processed)} registros) | {checkpoint_bytes/1e6:.1f} MB em {elapsed:.1f}s ({mbps:.2f} MB/s).")
+        _log(
+            f"{PHASE_COLOR}Checkpoint salvo ({len(state_processed)} registros) | "
+            f"{checkpoint_bytes/1e6:.1f} MB em {elapsed:.1f}s ({mbps:.2f} MB/s).{RESET_COLOR}"
+        )
         checkpoint_bytes = 0
         checkpoint_start = time.time()
 
