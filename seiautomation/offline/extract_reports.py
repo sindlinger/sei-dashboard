@@ -65,7 +65,7 @@ def _build_bucket_requirements() -> dict[DocumentBucket, set[str]]:
 BUCKET_REQUIREMENTS = _build_bucket_requirements()
 
 INVALID_EXCEL_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
-LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
+LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "extract"
 LOGGER = logging.getLogger("extract_reports")
 
 
