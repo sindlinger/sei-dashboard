@@ -1923,31 +1923,6 @@ def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
     # garantir comarca a partir do juízo
     _ensure_comarca_from_juizo(result)
 
-def _norm_name(value: str | None) -> str:
-    if not value:
-        return ""
-    value = value.strip().lower()
-    return "".join(c for c in unicodedata.normalize("NFD", value) if unicodedata.category(c) != "Mn")
-
-
-def _load_perito_catalog() -> set[str]:
-    global _PERITO_NAME_SET
-    if _PERITO_NAME_SET is not None:
-        return _PERITO_NAME_SET
-    names: set[str] = set()
-    try:
-        if _PERITO_CATALOG_PATH.exists():
-            import pandas as pd
-
-            df = pd.read_csv(_PERITO_CATALOG_PATH)
-            if "PERITO" in df.columns:
-                names = {_norm_name(n) for n in df["PERITO"].dropna()}
-    except Exception:
-        names = set()
-    _PERITO_NAME_SET = names
-    return names
-
-
 def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
     """Resolve conflitos e enriquece dados de perito usando catálogo externo."""
     perito_df = None
