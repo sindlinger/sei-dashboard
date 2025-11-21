@@ -27,9 +27,6 @@ from .doc_classifier import DocumentBucket, classify_document
 _PERITO_CATALOG_PATH = Path("outputs/banco-peritos/peritos_catalogo_final.csv")
 _PERITO_NAME_SET: set[str] | None = None
 
-_PERITO_CATALOG_PATH = Path("outputs/banco-peritos/peritos_catalogo_final.csv")
-_PERITO_NAME_SET: set[str] | None = None
-
 BUCKET_ORDER = [
     DocumentBucket.PRINCIPAL,
     DocumentBucket.APOIO,
@@ -1847,10 +1844,31 @@ def _snippet_has_keyword(snippet: str) -> bool:
 
 
 def _norm_name(value: str | None) -> str:
-    if not value or not isinstance(value, str):
+    """Normaliza nome para comparação (lowercase, sem acento).
+
+    Aceita qualquer tipo; valores não string ou NaN/None retornam string vazia.
+    """
+
+    if value is None:
         return ""
+
+    # Tratar NaN/pd.NA antes de chamar strip
+    try:  # pandas pode não estar presente em algumas rotas de teste
+        if pd.isna(value):
+            return ""
+    except Exception:
+        pass
+
+    if not isinstance(value, str):
+        try:
+            value = str(value)
+        except Exception:
+            return ""
+
     value = value.strip().lower()
-    return "".join(c for c in unicodedata.normalize("NFD", value) if unicodedata.category(c) != "Mn")
+    return "".join(
+        c for c in unicodedata.normalize("NFD", value) if unicodedata.category(c) != "Mn"
+    )
 
 
 def _load_perito_catalog() -> tuple[set[str], dict[str, str]]:
@@ -1899,59 +1917,42 @@ def _ensure_comarca_from_juizo(result: "ExtractionResult") -> None:
 
 
 def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
-    """Remove perito em campos de partes e ajusta CPF do perito pelo catálogo."""
+    """Resolve conflitos de perito, ajusta CPF e corrige comarca."""
+
+    # Catálogo completo para match exato e CPF
+    perito_df = None
+    try:
+        perito_df = pd.read_csv(_PERITO_CATALOG_PATH) if _PERITO_CATALOG_PATH.exists() else None
+    except Exception:
+        perito_df = None
+
     perito_names, name_to_cpf = _load_perito_catalog()
 
-    # limpar partes que coincidam com perito
+    # 1) Promovente/Promovido não podem ser perito
     for field in ("PROMOVENTE", "PROMOVIDO"):
         value = result.data.get(field, "")
         if value and _norm_name(value) in perito_names:
             result.data[field] = ""
             result.observations.append(f"{field} coincidia com nome de perito; valor removido")
 
-    # ajustar CPF do perito usando catálogo
-    perito_nome = result.data.get("PERITO", "") or ""
-    if perito_nome:
-        norm = _norm_name(perito_nome)
-        cat_cpf = name_to_cpf.get(norm, "")
-        if cat_cpf:
-            current_cpf = result.data.get("CPF/CNPJ", "") or ""
-            if current_cpf != cat_cpf:
-                result.data["CPF/CNPJ"] = cat_cpf
-                result.observations.append("CPF do perito ajustado pelo catálogo externo")
-
-    # garantir comarca a partir do juízo
-    _ensure_comarca_from_juizo(result)
-
-def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
-    """Resolve conflitos e enriquece dados de perito usando catálogo externo."""
-    perito_df = None
-    try:
-        perito_df = pd.read_csv(_PERITO_CATALOG_PATH) if _PERITO_CATALOG_PATH.exists() else None
-    except Exception:
-        perito_df = None
-    perito_names = _load_perito_catalog()
-
-    # 1) Promovente/Promovido não podem ser perito
-    for field in ("PROMOVENTE", "PROMOVIDO"):
-        value = result.data.get(field, "")
-        if not value:
-            continue
-        if _norm_name(value) in perito_names:
-            result.data[field] = ""
-            result.observations.append(f"{field} coincidia com nome de perito; valor removido")
-
     # 2) Enriquecer CPF/perito a partir do catálogo quando faltante ou divergente
     perito_nome = result.data.get("PERITO", "") or ""
     perito_cpf = result.data.get("CPF/CNPJ", "") or ""
-    if perito_df is not None and perito_nome:
+    if perito_nome:
         norm = _norm_name(perito_nome)
-        matches = perito_df[perito_df["PERITO"].apply(_norm_name) == norm]
-        if not matches.empty:
-            cat_cpf = str(matches.iloc[0].get("CPF/CNPJ", "")).strip()
-            if cat_cpf and cat_cpf != perito_cpf:
-                result.data["CPF/CNPJ"] = cat_cpf
-                result.observations.append("CPF do perito ajustado pelo catálogo externo")
+
+        cat_cpf = name_to_cpf.get(norm, "")
+        if not cat_cpf and perito_df is not None:
+            matches = perito_df[perito_df["PERITO"].apply(_norm_name) == norm]
+            if not matches.empty:
+                cat_cpf = str(matches.iloc[0].get("CPF/CNPJ", "")).strip()
+
+        if cat_cpf and cat_cpf != perito_cpf:
+            result.data["CPF/CNPJ"] = cat_cpf
+            result.observations.append("CPF do perito ajustado pelo catálogo externo")
+
+    # 3) Corrigir comarca a partir do juízo (capital → João Pessoa, "comarca de X" → X)
+    _ensure_comarca_from_juizo(result)
 
 
 def _load_existing_parquet_names(parquet_dir: Path) -> set[str]:
