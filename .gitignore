@@ -1,5 +1,6 @@
 # Arquivos de segredos locais
 .env.playwright
+.env
 AgentsFiles-to-tester_folder_terminals/
 peritos_catalogo.csv
 sample_relatorio.xlsx
