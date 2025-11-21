@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from dateutil import parser as date_parser
 from openpyxl import Workbook, load_workbook
+import pandas as pd
 
 from preprocessamento.documents import gather_texts, document_priority
 from preprocessamento.inputs import PreparedInput, resolve_input_paths
@@ -2057,6 +2058,12 @@ def append_single_result(
 
     _append_results_to_workbook(wb, start_index, [(zip_name, result)])
     wb.save(output)
+
+    # Persiste também em Parquet incremental (1 arquivo por ZIP) para geração futura
+    parquet_dir = output.parent / "parquet"
+    parquet_dir.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame([result.to_row(start_index + 1, zip_name)], columns=COLUMNS)
+    df.to_parquet(parquet_dir / f"{zip_name}.parquet", index=False)
 
 
 def main() -> None:
