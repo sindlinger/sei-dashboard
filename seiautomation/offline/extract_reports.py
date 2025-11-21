@@ -1233,11 +1233,6 @@ def _extract_especie_from_text(lines: Sequence[str], text: str) -> str:
     match = NATUREZA_SERVICO_PATTERN.search(text)
     if match:
         return match.group(1).strip()
-    # Fallback: primeira menção a "perícia <algo>" até pontuação/linha
-    fallback = re.search(r"per[ií]cia\s+([A-Za-zÀ-ÿ'\.\- ]{3,80})", text, flags=re.IGNORECASE)
-    if fallback:
-        candidate = fallback.group(1).split("\n")[0].split(".")[0].split(";")[0]
-        return candidate.strip(" -–:")
     return ""
 
 
@@ -1276,37 +1271,6 @@ def _match_alias(text: str | None) -> dict[str, str] | None:
         if any(keyword in norm for keyword in alias["keywords"]):
             return alias["entry"]
     return None
-
-
-NOISE_SPECIE_PATTERNS = [
-    re.compile(p, re.IGNORECASE)
-    for p in [
-        r"^nos\s+autos",
-        r"^realizad[ao]",
-        r"^tipo\s+de\s+pessoa",
-        r"^\(\s*\)\s*tradu[cç][aã]o",
-        r"^\(\s*\)\s*interpreta[cç][aã]o",
-        r"^\d{1,2}/\d{1,2}/\d{2,4}",
-        r"^(servi[cç]o|servico) de",
-        r"^objeto do presente",
-        r"^referente ao processo",
-        r"^dita\s+per[ií]cia",
-    ]
-]
-
-
-def _clean_especie_candidate(value: str) -> str:
-    if not value:
-        return ""
-    v = value.strip().strip("-–:;.,")
-    # remover lixo inicial
-    for pat in NOISE_SPECIE_PATTERNS:
-        if pat.match(v.lower()):
-            return ""
-    # descartar se for muito curto ou só duas palavras genéricas
-    if len(v) < 4:
-        return ""
-    return v
 
 
 def _format_currency_value(value: str | float) -> str:
@@ -1406,9 +1370,6 @@ def _apply_species_mapping(
     if not especie:
         return
 
-    especie = _clean_especie_candidate(especie)
-    if not especie:
-        return
     especie_clean = especie.strip(" \t-–:;")
     if not especie_clean:
         return
