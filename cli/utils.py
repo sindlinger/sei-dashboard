@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import List
@@ -52,8 +53,19 @@ def collect_offline_paths(args) -> tuple[list[Path], list[Path]]:
         directory = ensure_path(args.qa_pdf_dir)
         pdf_paths.extend(sorted(p for p in directory.glob("*.pdf") if p.is_file()))
 
+    # Fallback: diretório padrão de downloads (SEI_DOWNLOAD_DIR ou playwright-downloads)
     if not zip_paths and not pdf_paths:
-        raise SystemExit("Informe ZIP/PDF via --zip/--zip-dir/--pdf/--pdf-dir.")
+        default_dir = Path(os.getenv("SEI_DOWNLOAD_DIR", "playwright-downloads")).expanduser().resolve()
+        if not default_dir.exists():
+            raise SystemExit(
+                "Nenhum ZIP/PDF informado e o diretório padrão de downloads não existe: "
+                f"{default_dir}. Use --zip/--zip-dir/--pdf/--pdf-dir."
+            )
+        zip_paths.extend(sorted(p for p in default_dir.glob("*.zip") if p.is_file()))
+        pdf_paths.extend(sorted(p for p in default_dir.glob("*.pdf") if p.is_file()))
+
+    if not zip_paths and not pdf_paths:
+        raise SystemExit("Nenhum ZIP/PDF encontrado. Informe fontes ou coloque arquivos no diretório padrão de downloads.")
     return zip_paths, pdf_paths
 
 
