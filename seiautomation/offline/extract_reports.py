@@ -799,6 +799,18 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                 weight=0.7,
                 matched_entry=alias_entry,
             )
+    elif res.data.get("ESPECIALIDADE"):
+        # Mapear a partir da especialidade já extraída
+        entry = _match_alias(res.data.get("ESPECIALIDADE", ""))
+        if entry:
+            _apply_species_mapping(
+                res,
+                entry.get("DESCRICAO", res.data.get("ESPECIALIDADE", "")),
+                source_doc,
+                context_text=lookup_text,
+                weight=0.65,
+                matched_entry=entry,
+            )
 
     fator = _line_value(lines, FATOR_LABELS)
     if not fator:
@@ -1221,6 +1233,11 @@ def _extract_especie_from_text(lines: Sequence[str], text: str) -> str:
     match = NATUREZA_SERVICO_PATTERN.search(text)
     if match:
         return match.group(1).strip()
+    # Fallback: primeira menção a "perícia <algo>" até pontuação/linha
+    fallback = re.search(r"per[ií]cia\s+([A-Za-zÀ-ÿ'\.\- ]{3,80})", text, flags=re.IGNORECASE)
+    if fallback:
+        candidate = fallback.group(1).split("\n")[0].split(".")[0].split(";")[0]
+        return candidate.strip(" -–:")
     return ""
 
 
