@@ -8,6 +8,7 @@ playwright-downloads/
 grepo/
 logs/
 outputs/reports/parquet/
+outputs/reports/*.xlsx
 ml/.venv/
 ml/datasets/
 ml/models/

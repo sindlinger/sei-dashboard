@@ -8,6 +8,7 @@ import logging
 import re
 import sys
 import unicodedata
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,7 @@ from uuid import uuid4
 
 from dateutil import parser as date_parser
 import pandas as pd
+from openpyxl import Workbook, load_workbook
 
 from preprocessamento.documents import gather_texts, document_priority
 from preprocessamento.inputs import PreparedInput, resolve_input_paths
@@ -1837,25 +1839,39 @@ def _snippet_has_keyword(snippet: str) -> bool:
     return any(keyword in snippet for keyword in REQUISITION_KEYWORDS)
 
 
-def _load_existing_zip_names(path: Path) -> set[str]:
-    processed: set[str] = set()
-    if not path.exists():
-        return processed
-    try:
-        wb = load_workbook(path, read_only=True, data_only=True)
-    except Exception:
-        return processed
-    if "Pericias" not in wb.sheetnames:
-        return processed
-    ws = wb["Pericias"]
-    col_idx = COLUMNS.index("ARQUIVO_ORIGEM")
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if not row or len(row) <= col_idx:
-            continue
-        value = row[col_idx]
-        if value:
-            processed.add(str(value))
-    return processed
+def _load_existing_parquet_names(parquet_dir: Path) -> set[str]:
+    """Retorna nomes de ZIP que já possuem parquet salvo."""
+    if not parquet_dir.exists():
+        return set()
+    return {p.stem for p in parquet_dir.glob("*.parquet")}
+
+
+def process_and_save_parquet(zip_name: str, resolved_path: str, parquet_dir: str) -> str:
+    """Worker: processa um arquivo e salva parquet (1 arquivo por ZIP)."""
+    path = Path(resolved_path)
+    result = process_zip(path)
+    pdir = Path(parquet_dir)
+    pdir.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame([result.to_row(0, zip_name)], columns=COLUMNS)
+    df.to_parquet(pdir / f"{zip_name}.parquet", index=False)
+    return zip_name
+
+
+def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
+    """Consolida todos os parquets existentes em um Excel único."""
+    files = sorted(parquet_dir.glob("*.parquet"))
+    if not files:
+        return
+    dfs = [pd.read_parquet(f) for f in files]
+    df_all = pd.concat(dfs, ignore_index=True)
+    # Garante colunas e renumera
+    for c in COLUMNS:
+        if c not in df_all.columns:
+            df_all[c] = ""
+    df_all = df_all[COLUMNS]
+    df_all["Nº DE PERÍCIAS"] = range(1, len(df_all) + 1)
+    excel_path.parent.mkdir(parents=True, exist_ok=True)
+    df_all.to_excel(excel_path, index=False)
 
 
 def _append_results_to_workbook(
@@ -2092,11 +2108,12 @@ def main() -> None:
     state_processed = set(state.get("processed_files", []))
     state["output"] = str(output)
 
+    parquet_dir = output.parent / "parquet"
     processed_zips: set[str] = set()
-    if args.skip_existing and output.exists():
-        processed_zips = _load_existing_zip_names(output)
+    if args.skip_existing and parquet_dir.exists():
+        processed_zips = _load_existing_parquet_names(parquet_dir)
         if processed_zips:
-            _log(f"{len(processed_zips)} registro(s) já presentes em {output.name}; serão ignorados.")
+            _log(f"{len(processed_zips)} registro(s) já presentes (parquet); serão ignorados.")
 
     processed_set = set(processed_zips)
     processed_set.update(state_processed)
@@ -2114,33 +2131,44 @@ def main() -> None:
         return
 
     checkpoint_interval = max(1, args.checkpoint_interval)
-    input_order = {prepared.original.name: idx for idx, prepared in enumerate(remaining_inputs)}
-
     total_to_process = len(remaining_inputs)
-    _log(f"Processando {total_to_process} arquivo(s) em modo sequencial (1 worker).")
+    _log(f"Processando {total_to_process} arquivo(s) com {args.workers} workers.")
     _print_header(run_id, log_path, total_to_process)
 
+    def consolidate_checkpoint(final: bool = False) -> None:
+        state["processed_files"] = sorted(state_processed)
+        state["last_update"] = datetime.now().isoformat()
+        state["completed"] = final
+        _save_state(run_id, state)
+        # consolida todos parquets existentes em Excel
+        consolidate_parquets(parquet_dir, output)
+        _log(f"Checkpoint salvo ({len(state_processed)} registros).")
+
     try:
-        for idx, prepared in enumerate(remaining_inputs, start=1):
-            _log_progress(idx, total_to_process, prepared.original.name)
-            result = process_zip(prepared.resolved)
-            append_single_result(output, prepared.original.name, result)
-            _append_audit_entries(audit_path, [(prepared.original.name, result)], run_id)
-            processed_set.add(prepared.original.name)
-            state_processed.add(prepared.original.name)
-            if idx % checkpoint_interval == 0:
-                state["processed_files"] = sorted(state_processed)
-                state["last_update"] = datetime.now().isoformat()
-                state["completed"] = False
-                _save_state(run_id, state)
+        with ProcessPoolExecutor(max_workers=max(1, args.workers)) as executor:
+            futures = {
+                executor.submit(
+                    process_and_save_parquet,
+                    prepared.original.name,
+                    str(prepared.resolved),
+                    str(parquet_dir),
+                ): prepared.original.name
+                for prepared in remaining_inputs
+            }
+            completed = 0
+            for future in as_completed(futures):
+                name = future.result()
+                completed += 1
+                _log_progress(completed, total_to_process, name)
+                processed_set.add(name)
+                state_processed.add(name)
+                if completed % checkpoint_interval == 0:
+                    consolidate_checkpoint(final=False)
     finally:
         if temp_dir:
             temp_dir.cleanup()
 
-    state["processed_files"] = sorted(state_processed)
-    state["last_update"] = datetime.now().isoformat()
-    state["completed"] = True
-    _save_state(run_id, state)
+    consolidate_checkpoint(final=True)
     _finish_progress()
     _log(f"Relatório salvo/atualizado em {output}")
 
