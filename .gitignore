@@ -6,6 +6,8 @@ peritos_catalogo.csv
 sample_relatorio.xlsx
 playwright-downloads/
 grepo/
+logs/
+outputs/reports/parquet/
 ml/.venv/
 ml/datasets/
 ml/models/
