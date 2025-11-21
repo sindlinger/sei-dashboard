@@ -1155,28 +1155,35 @@ def _extract_perito_info(lines: Sequence[str]) -> PeritoInfo:
     return info
 
 
-INTERESSADO_PATTERN = re.compile(
-    r"interessad[oa]:?\s*(?P<nome>[^\n–\-]+?)\s*[–\-]\s*(?P<prof>[^\n–\-]+?)(?:\s*[–\-]\s*(?P<email>\S+@\S+))?",
-    re.IGNORECASE,
-)
-
-
 def _extract_interessado_info(text: str) -> PeritoInfo:
     info = PeritoInfo()
     if not text:
         return info
-    match = INTERESSADO_PATTERN.search(text)
-    if not match:
+    # Procura linha com "Interessado:" ou "Interessada:"
+    alvo = None
+    for line in text.splitlines():
+        lower = line.lower()
+        if "interessado" in lower:
+            alvo = line
+            break
+    if not alvo:
         return info
-    nome = match.group("nome").strip()
-    prof = match.group("prof").strip()
-    email = (match.group("email") or "").strip()
-    if nome:
-        info.nome = nome
-    if prof:
-        # remover prefixo perito/perita
-        info.especialidade = re.sub(r"^perit[oa]\s+", "", prof, flags=re.IGNORECASE).strip()
-    info.profissao = info.especialidade
+    # pega texto após o rótulo
+    after = alvo
+    after = re.split(r"interessad[oa]\s*:?", after, flags=re.IGNORECASE, maxsplit=1)[-1].strip()
+    if not after:
+        return info
+    # divide por traço ou vírgula (nome – profissão – email?)
+    parts = re.split(r"\s*[–\-]\s*|\s*,\s*", after)
+    parts = [p.strip() for p in parts if p.strip()]
+    if parts:
+        info.nome = parts[0]
+    if len(parts) > 1:
+        prof = parts[1]
+        # remover prefixo perito/perita (opcional)
+        prof = re.sub(r"^perit[oa]\s+", "", prof, flags=re.IGNORECASE).strip()
+        info.especialidade = prof
+        info.profissao = prof
     return info
 
 
