@@ -23,6 +23,9 @@ from preprocessamento.documents import gather_texts, document_priority
 from preprocessamento.inputs import PreparedInput, resolve_input_paths
 from .doc_classifier import DocumentBucket, classify_document
 
+_PERITO_CATALOG_PATH = Path("outputs/banco-peritos/peritos_catalogo_final.csv")
+_PERITO_NAME_SET: set[str] | None = None
+
 BUCKET_ORDER = [
     DocumentBucket.PRINCIPAL,
     DocumentBucket.APOIO,
@@ -1839,6 +1842,43 @@ def _snippet_has_keyword(snippet: str) -> bool:
     return any(keyword in snippet for keyword in REQUISITION_KEYWORDS)
 
 
+def _norm_name(value: str | None) -> str:
+    if not value:
+        return ""
+    value = value.strip().lower()
+    return "".join(c for c in unicodedata.normalize("NFD", value) if unicodedata.category(c) != "Mn")
+
+
+def _load_perito_catalog() -> set[str]:
+    global _PERITO_NAME_SET
+    if _PERITO_NAME_SET is not None:
+        return _PERITO_NAME_SET
+    names: set[str] = set()
+    try:
+        if _PERITO_CATALOG_PATH.exists():
+            import pandas as pd
+
+            df = pd.read_csv(_PERITO_CATALOG_PATH)
+            if "PERITO" in df.columns:
+                names = {_norm_name(n) for n in df["PERITO"].dropna()}
+    except Exception:
+        names = set()
+    _PERITO_NAME_SET = names
+    return names
+
+
+def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
+    """Se PROMOVENTE/PROMOVIDO coincidirem com nomes de peritos, limpa e registra observação."""
+    perito_names = _load_perito_catalog()
+    for field in ("PROMOVENTE", "PROMOVIDO"):
+        value = result.data.get(field, "")
+        if not value:
+            continue
+        if _norm_name(value) in perito_names:
+            result.data[field] = ""
+            result.observations.append(f"{field} coincidia com nome de perito; valor removido")
+
+
 def _load_existing_parquet_names(parquet_dir: Path) -> set[str]:
     """Retorna nomes de ZIP que já possuem parquet salvo."""
     if not parquet_dir.exists():
@@ -1850,11 +1890,12 @@ def process_and_save_parquet(zip_name: str, resolved_path: str, parquet_dir: str
     """Worker: processa um arquivo e salva parquet (1 arquivo por ZIP)."""
     path = Path(resolved_path)
     result = process_zip(path)
+    _scrub_perito_conflicts(result)
     pdir = Path(parquet_dir)
     pdir.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame([result.to_row(0, zip_name)], columns=COLUMNS)
     df.to_parquet(pdir / f"{zip_name}.parquet", index=False)
-    return zip_name
+    return zip_name, result
 
 
 def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
@@ -2157,7 +2198,7 @@ def main() -> None:
             }
             completed = 0
             for future in as_completed(futures):
-                name = future.result()
+                name, result = future.result()
                 completed += 1
                 _log_progress(completed, total_to_process, name)
                 processed_set.add(name)
