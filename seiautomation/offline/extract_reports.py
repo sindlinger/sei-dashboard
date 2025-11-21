@@ -15,7 +15,6 @@ from typing import Iterable, List, Sequence, Set
 from uuid import uuid4
 
 from dateutil import parser as date_parser
-from openpyxl import Workbook, load_workbook
 import pandas as pd
 
 from preprocessamento.documents import gather_texts, document_priority
@@ -2024,7 +2023,7 @@ def main() -> None:
         action="store_true",
         help="Se o arquivo de saída já existir, ignora os registros já presentes e acrescenta somente os novos.",
     )
-    parser.add_argument("--workers", type=int, default=1, help="Número de processos em paralelo (ignorado: sempre 1).")
+    parser.add_argument("--workers", type=int, default=24, help="Número de processos em paralelo (default=24).")
     parser.add_argument("--run-id", help="Identificador personalizado da execução.")
     parser.add_argument("--resume", help="Retoma a execução indicada (run-id).")
     parser.add_argument(
@@ -2043,8 +2042,6 @@ def main() -> None:
 
     if args.resume and args.run_id:
         parser.error("Use apenas --run-id ou --resume, não ambos.")
-
-    args.workers = 1  # força execução sequencial
 
     if args.resume:
         run_id = args.resume
