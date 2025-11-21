@@ -2001,11 +2001,14 @@ def process_and_save_parquet(zip_name: str, resolved_path: str, parquet_dir: str
     return zip_name, result
 
 
-def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
-    """Consolida todos os parquets existentes em um Excel único."""
+def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> list[Path]:
+    """Consolida todos os parquets existentes em um Excel único.
+
+    Retorna a lista de parquets corrompidos/ignorados.
+    """
     files = sorted(parquet_dir.glob("*.parquet"))
     if not files:
-        return
+        return []
     dfs = []
     bad_files = []
     for f in files:
@@ -2016,7 +2019,7 @@ def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
     if bad_files:
         _log(f"Aviso: {len(bad_files)} parquet(s) corrompido(s) ignorado(s): {[p.name for p in bad_files]}")
     if not dfs:
-        return
+        return bad_files
     df_all = pd.concat(dfs, ignore_index=True)
 
     # Fallback para VALOR ARBITRADO: CM > DE (somente valor monetário)
@@ -2044,6 +2047,7 @@ def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
     df_all["Nº DE PERÍCIAS"] = range(1, len(df_all) + 1)
     excel_path.parent.mkdir(parents=True, exist_ok=True)
     df_all.to_excel(excel_path, index=False)
+    return bad_files
 
 
 def _append_results_to_workbook(
@@ -2321,12 +2325,16 @@ def main() -> None:
         state["completed"] = final
         _save_state(run_id, state)
         # consolida todos parquets existentes em Excel
-        consolidate_parquets(parquet_dir, output)
+        bad = consolidate_parquets(parquet_dir, output)
+        if bad:
+            bad_files_total.update([p.name for p in bad])
         elapsed = time.time() - checkpoint_start
         mbps = (checkpoint_bytes / 1e6) / elapsed if elapsed > 0 else 0
         _log(f"Checkpoint salvo ({len(state_processed)} registros) | {checkpoint_bytes/1e6:.1f} MB em {elapsed:.1f}s ({mbps:.2f} MB/s).")
         checkpoint_bytes = 0
         checkpoint_start = time.time()
+
+    bad_files_total: set[str] = set()
 
     try:
         t0 = time.time()
@@ -2361,6 +2369,8 @@ def main() -> None:
     consolidate_checkpoint(final=True)
     _finish_progress()
     _log(f"Relatório salvo/atualizado em {output}")
+    if bad_files_total:
+        _log(f"Aviso final: {len(bad_files_total)} parquet(s) corrompido(s) foram ignorados: {sorted(bad_files_total)}")
 
 
 if __name__ == "__main__":
