@@ -2115,6 +2115,8 @@ def main() -> None:
     if args.resume and args.run_id:
         parser.error("Use apenas --run-id ou --resume, não ambos.")
 
+    args.workers = 1  # força execução sequencial
+
     if args.resume:
         run_id = args.resume
         state = _load_state(run_id)
