@@ -38,6 +38,22 @@ def ensure_path(value: str) -> Path:
     return path
 
 
+def ensure_dir_writable(path: Path) -> None:
+    path = path.expanduser().resolve()
+    path.mkdir(parents=True, exist_ok=True)
+    test_file = path / ".writetest"
+    try:
+        test_file.write_text("ok", encoding="utf-8")
+    except Exception as exc:
+        raise SystemExit(f"Diretório não gravável: {path} ({exc})")
+    finally:
+        if test_file.exists():
+            try:
+                test_file.unlink()
+            except Exception:
+                pass
+
+
 def collect_offline_paths(args) -> tuple[list[Path], list[Path]]:
     zip_paths: list[Path] = []
     pdf_paths: list[Path] = []

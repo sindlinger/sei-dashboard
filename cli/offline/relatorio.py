@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..utils import ensure_path
+from ..utils import ensure_path, ensure_dir_writable
 
 
 def register(subparsers) -> None:
@@ -23,6 +23,14 @@ def register(subparsers) -> None:
 def _run(args, settings) -> int:
     zip_dir = Path(args.report_zip_dir).expanduser() if args.report_zip_dir else settings.download_dir
     output = Path(args.report_output).expanduser()
+    # Preflight: diretórios e permissões
+    if not zip_dir.exists():
+        raise SystemExit(f"Diretório de ZIPs não encontrado: {zip_dir}")
+    if not any(zip_dir.glob("*.zip")):
+        raise SystemExit(f"Nenhum ZIP encontrado em {zip_dir}.")
+    ensure_dir_writable(output.parent)
+    ensure_dir_writable(settings.download_dir)
+    ensure_dir_writable(Path("logs/extract"))
     output.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
