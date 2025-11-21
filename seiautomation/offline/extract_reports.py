@@ -98,13 +98,14 @@ def _save_state(run_id: str, state: dict) -> None:
     path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _setup_logger(run_id: str) -> Path:
+def _setup_logger(run_id: str, disable_file_log: bool = False) -> Path:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_path = LOG_DIR / f"{run_id}.log"
-    handler = logging.FileHandler(log_path, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
     LOGGER.handlers.clear()
-    LOGGER.addHandler(handler)
+    if not disable_file_log:
+        handler = logging.FileHandler(log_path, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        LOGGER.addHandler(handler)
     LOGGER.setLevel(logging.INFO)
     LOGGER.propagate = False
     return log_path
@@ -2220,6 +2221,11 @@ def main() -> None:
         default=30,
         help="Remove logs/checkpoints com mais de N dias (0 desativa).",
     )
+    parser.add_argument(
+        "--no-file-log",
+        action="store_true",
+        help="Não grava .log em disco (útil quando o logger está lento; mantém saída no console).",
+    )
     args = parser.parse_args()
 
     if args.resume and args.run_id:
@@ -2234,7 +2240,7 @@ def main() -> None:
             _cleanup_old_logs(args.log_retention_days)
         state = {"run_id": run_id, "created_at": datetime.now().isoformat()}
 
-    log_path = _setup_logger(run_id)
+    log_path = _setup_logger(run_id, disable_file_log=args.no_file_log)
     audit_path = LOG_DIR / f"{run_id}.sources.jsonl"
     _log(f"Executando extração (run-id={run_id}) - log: {log_path}")
     zip_paths: list[Path] = []
