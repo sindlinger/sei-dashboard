@@ -131,15 +131,14 @@ def _print_header(run_id: str, log_path: Path, total: int) -> None:
     print(banner)
 
 
-def _render_progress(completed: int, total: int) -> None:
+def _log_progress(completed: int, total: int, name: str | None = None) -> None:
     if total <= 0:
         return
     pct = completed / total
-    width = 40
-    filled = int(width * pct)
-    bar = "#" * filled + "-" * (width - filled)
-    # imprime em linha separada para não ser sobrescrito pelos logs
-    print(f"[{bar}] {completed}/{total} ({pct*100:5.1f}%)", flush=True)
+    msg = f"{completed}/{total} ({pct*100:5.1f}%)"
+    if name:
+        msg = f"{msg} - {name}"
+    _log(msg)
 
 
 def _finish_progress() -> None:
@@ -2209,8 +2208,7 @@ def main() -> None:
                 for future in as_completed(futures):
                     name, result = future.result()
                     completed += 1
-                    _log(f"Concluído {name} ({completed}/{total_to_process})")
-                    _render_progress(completed, total_to_process)
+                    _log_progress(completed, total_to_process, name)
                     append_single_result(output, name, result)
                     _append_audit_entries(audit_path, [(name, result)], run_id)
                     processed_set.add(name)
@@ -2222,13 +2220,12 @@ def main() -> None:
                         _save_state(run_id, state)
         else:
             for idx, prepared in enumerate(remaining_inputs, start=1):
-                _log(f"Processando {prepared.original.name} ({idx}/{total_to_process})...")
+                _log_progress(idx, total_to_process, prepared.original.name)
                 result = process_zip(prepared.resolved)
                 append_single_result(output, prepared.original.name, result)
                 _append_audit_entries(audit_path, [(prepared.original.name, result)], run_id)
                 processed_set.add(prepared.original.name)
                 state_processed.add(prepared.original.name)
-                _render_progress(idx, total_to_process)
                 if idx % checkpoint_interval == 0:
                     state["processed_files"] = sorted(state_processed)
                     state["last_update"] = datetime.now().isoformat()
