@@ -2000,6 +2000,90 @@ def write_excel(results: list[tuple[str, ExtractionResult]], output: Path, appen
     wb.save(output)
 
 
+def append_single_result(
+    output: Path,
+    zip_name: str,
+    result: ExtractionResult,
+) -> None:
+    """
+    Acrescenta um único resultado no XLSX sem acumular em memória.
+    Cria o arquivo se não existir.
+    """
+    if output.exists():
+        wb = load_workbook(output)
+        if "Pericias" not in wb.sheetnames:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Pericias"
+            ws.append(COLUMNS)
+            wb.create_sheet("Pendencias").append(COLUMNS)
+            fontes = wb.create_sheet("Fontes")
+            fontes.append([
+                "Nº DE PERÍCIAS",
+                "Campo",
+                "Valor",
+                "Documento Fonte",
+                "Pattern/Heurística",
+                "Snippet",
+                "Page",
+                "Start",
+                "End",
+                "ZIP",
+            ])
+            candidatos = wb.create_sheet("Candidatos")
+            candidatos.append([
+                "Nº DE PERÍCIAS",
+                "Campo",
+                "Valor",
+                "Peso",
+                "Fonte",
+                "Pattern/Heurística",
+                "Snippet",
+                "Start",
+                "End",
+                "ZIP",
+            ])
+            start_index = 0
+        else:
+            start_index = max(0, wb["Pericias"].max_row - 1)
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pericias"
+        ws.append(COLUMNS)
+        wb.create_sheet("Pendencias").append(COLUMNS)
+        fontes = wb.create_sheet("Fontes")
+        fontes.append([
+            "Nº DE PERÍCIAS",
+            "Campo",
+            "Valor",
+            "Documento Fonte",
+            "Pattern/Heurística",
+            "Snippet",
+            "Page",
+            "Start",
+            "End",
+            "ZIP",
+        ])
+        candidatos = wb.create_sheet("Candidatos")
+        candidatos.append([
+            "Nº DE PERÍCIAS",
+            "Campo",
+            "Valor",
+            "Peso",
+            "Fonte",
+            "Pattern/Heurística",
+            "Snippet",
+            "Start",
+            "End",
+            "ZIP",
+        ])
+        start_index = 0
+
+    _append_results_to_workbook(wb, start_index, [(zip_name, result)])
+    wb.save(output)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extrai dados dos despachos do SEI a partir de arquivos locais.")
     parser.add_argument("--zip-dir", type=Path, help="Diretório com os arquivos ZIP.")
@@ -2104,23 +2188,6 @@ def main() -> None:
 
     checkpoint_interval = max(1, args.checkpoint_interval)
     input_order = {prepared.original.name: idx for idx, prepared in enumerate(remaining_inputs)}
-    chunk_results: list[tuple[str, ExtractionResult]] = []
-
-    def flush_chunk(final: bool = False) -> None:
-        if not chunk_results:
-            return
-        ordered = sorted(chunk_results, key=lambda item: input_order.get(item[0], 0))
-        write_excel(ordered, output, append=True)
-        names = [name for name, _ in ordered]
-        processed_set.update(names)
-        state_processed.update(names)
-        state["processed_files"] = sorted(state_processed)
-        state["last_update"] = datetime.now().isoformat()
-        state["completed"] = final
-        _save_state(run_id, state)
-        _append_audit_entries(audit_path, ordered, run_id)
-        _log(f"Checkpoint salvo ({len(state_processed)} registros no total).")
-        chunk_results.clear()
 
     total_to_process = len(remaining_inputs)
     _log(f"Processando {total_to_process} arquivo(s) com {args.workers} worker(s).")
@@ -2140,25 +2207,40 @@ def main() -> None:
                 completed = 0
                 for future in as_completed(futures):
                     name, result = future.result()
-                    chunk_results.append((name, result))
                     completed += 1
                     _log(f"Concluído {name} ({completed}/{total_to_process})")
                     _render_progress(completed, total_to_process)
-                    if len(chunk_results) >= checkpoint_interval:
-                        flush_chunk()
+                    append_single_result(output, name, result)
+                    _append_audit_entries(audit_path, [(name, result)], run_id)
+                    processed_set.add(name)
+                    state_processed.add(name)
+                    if completed % checkpoint_interval == 0:
+                        state["processed_files"] = sorted(state_processed)
+                        state["last_update"] = datetime.now().isoformat()
+                        state["completed"] = False
+                        _save_state(run_id, state)
         else:
             for idx, prepared in enumerate(remaining_inputs, start=1):
                 _log(f"Processando {prepared.original.name} ({idx}/{total_to_process})...")
                 result = process_zip(prepared.resolved)
-                chunk_results.append((prepared.original.name, result))
+                append_single_result(output, prepared.original.name, result)
+                _append_audit_entries(audit_path, [(prepared.original.name, result)], run_id)
+                processed_set.add(prepared.original.name)
+                state_processed.add(prepared.original.name)
                 _render_progress(idx, total_to_process)
-                if len(chunk_results) >= checkpoint_interval:
-                    flush_chunk()
+                if idx % checkpoint_interval == 0:
+                    state["processed_files"] = sorted(state_processed)
+                    state["last_update"] = datetime.now().isoformat()
+                    state["completed"] = False
+                    _save_state(run_id, state)
     finally:
         if temp_dir:
             temp_dir.cleanup()
 
-    flush_chunk(final=True)
+    state["processed_files"] = sorted(state_processed)
+    state["last_update"] = datetime.now().isoformat()
+    state["completed"] = True
+    _save_state(run_id, state)
     _finish_progress()
     _log(f"Relatório salvo/atualizado em {output}")
 
