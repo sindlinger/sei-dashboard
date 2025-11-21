@@ -19,7 +19,8 @@ def register(subparsers) -> None:
     parser.add_argument("--max-per-field", dest="qa_max_per_field", type=int, default=3, help="Quantidade de contextos por campo (default=3).")
     parser.add_argument("--min-score", dest="qa_min_score", type=float, default=0.25, help="Score mínimo para aceitar respostas.")
     parser.add_argument("--model", dest="qa_model", default=str(DEFAULT_QA_MODEL), help="Checkpoint do modelo QA.")
-    parser.add_argument("--workers", dest="qa_workers", type=int, default=2, help="Workers para extrair contextos (0/1 desativa paralelismo).")
+    # Mantido por compatibilidade; o pipeline atual não usa workers, apenas ignora.
+    parser.add_argument("--workers", dest="qa_workers", type=int, default=None, help="(Ignorado) workers para seleção de contextos.")
     parser.add_argument("--batch-size", dest="qa_batch_size", type=int, default=16, help="Perguntas por lote enviado ao modelo.")
     parser.add_argument("--output", dest="qa_output", default="qa-results.json", help="JSON de saída com as respostas.")
     parser.add_argument("--device", dest="qa_device", type=int, default=0, help="GPU usada (use -1 para CPU).")
