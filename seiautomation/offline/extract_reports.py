@@ -2018,6 +2018,24 @@ def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> None:
     if not dfs:
         return
     df_all = pd.concat(dfs, ignore_index=True)
+
+    # Fallback para VALOR ARBITRADO: CM > DE (somente valor monetário)
+    money_re = re.compile(r"r\$\s*[0-9]{1,3}(?:\.[0-9]{3})*,?\d{2}", re.IGNORECASE)
+
+    def _money(val: str | None) -> str:
+        if not isinstance(val, str):
+            return ""
+        m = money_re.search(val)
+        return m.group(0).strip() if m else ""
+
+    if "VALOR ARBITRADO" not in df_all.columns:
+        df_all["VALOR ARBITRADO"] = ""
+    mask_empty = df_all["VALOR ARBITRADO"].isna() | (df_all["VALOR ARBITRADO"] == "")
+    if "VALOR ARBITRADO - CM" in df_all.columns:
+        df_all.loc[mask_empty, "VALOR ARBITRADO"] = df_all.loc[mask_empty, "VALOR ARBITRADO - CM"].apply(_money)
+    mask_empty = df_all["VALOR ARBITRADO"].isna() | (df_all["VALOR ARBITRADO"] == "")
+    if "VALOR ARBITRADO - DE" in df_all.columns:
+        df_all.loc[mask_empty, "VALOR ARBITRADO"] = df_all.loc[mask_empty, "VALOR ARBITRADO - DE"].apply(_money)
     # Garante colunas e renumera
     for c in COLUMNS:
         if c not in df_all.columns:
