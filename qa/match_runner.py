@@ -64,14 +64,12 @@ def run_match(
             return {}
         records = _prepare_records(prepared_inputs, fields, max_per_field=max_per_field)
         qa_inputs, metadata = _build_qa_inputs(records, fields, max_per_field=max_per_field)
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
         qa_pipe = pipeline(
             "question-answering",
             model=model_name,
             tokenizer=tokenizer,
             device=device,
-            handle_impossible_answer=True,
-            truncation=True,
         )
         qa_payloads: Dict[str, Dict[str, List[dict]]] = {}
         if qa_inputs:
