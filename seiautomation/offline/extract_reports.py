@@ -2005,64 +2005,10 @@ def append_single_result(
     zip_name: str,
     result: ExtractionResult,
 ) -> None:
-    """
-    Acrescenta um único resultado no XLSX sem acumular em memória.
-    Cria o arquivo se não existir.
-    """
-    def _new_workbook() -> tuple[Workbook, int]:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Pericias"
-        ws.append(COLUMNS)
-        wb.create_sheet("Pendencias").append(COLUMNS)
-        fontes = wb.create_sheet("Fontes")
-        fontes.append([
-            "Nº DE PERÍCIAS",
-            "Campo",
-            "Valor",
-            "Documento Fonte",
-            "Pattern/Heurística",
-            "Snippet",
-            "Page",
-            "Start",
-            "End",
-            "ZIP",
-        ])
-        candidatos = wb.create_sheet("Candidatos")
-        candidatos.append([
-            "Nº DE PERÍCIAS",
-            "Campo",
-            "Valor",
-            "Peso",
-            "Fonte",
-            "Pattern/Heurística",
-            "Snippet",
-            "Start",
-            "End",
-            "ZIP",
-        ])
-        return wb, 0
-
-    if output.exists():
-        try:
-            wb = load_workbook(output)
-            if "Pericias" not in wb.sheetnames:
-                wb, start_index = _new_workbook()
-            else:
-                start_index = max(0, wb["Pericias"].max_row - 1)
-        except Exception:
-            # arquivo corrompido; recria
-            wb, start_index = _new_workbook()
-    else:
-        wb, start_index = _new_workbook()
-
-    _append_results_to_workbook(wb, start_index, [(zip_name, result)])
-    wb.save(output)
-
-    # Persiste também em Parquet incremental (1 arquivo por ZIP) para geração futura
+    # Persistência incremental segura: Parquet por ZIP
     parquet_dir = output.parent / "parquet"
     parquet_dir.mkdir(parents=True, exist_ok=True)
-    df = pd.DataFrame([result.to_row(start_index + 1, zip_name)], columns=COLUMNS)
+    df = pd.DataFrame([result.to_row(0, zip_name)], columns=COLUMNS)
     df.to_parquet(parquet_dir / f"{zip_name}.parquet", index=False)
 
 
