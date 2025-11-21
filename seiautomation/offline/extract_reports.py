@@ -2096,7 +2096,7 @@ def main() -> None:
         action="store_true",
         help="Se o arquivo de saída já existir, ignora os registros já presentes e acrescenta somente os novos.",
     )
-    parser.add_argument("--workers", type=int, default=1, help="Número de processos em paralelo (default=1).")
+    parser.add_argument("--workers", type=int, default=1, help="Número de processos em paralelo (ignorado: sempre 1).")
     parser.add_argument("--run-id", help="Identificador personalizado da execução.")
     parser.add_argument("--resume", help="Retoma a execução indicada (run-id).")
     parser.add_argument(
@@ -2190,47 +2190,22 @@ def main() -> None:
     input_order = {prepared.original.name: idx for idx, prepared in enumerate(remaining_inputs)}
 
     total_to_process = len(remaining_inputs)
-    _log(f"Processando {total_to_process} arquivo(s) com {args.workers} worker(s).")
+    _log(f"Processando {total_to_process} arquivo(s) em modo sequencial (1 worker).")
     _print_header(run_id, log_path, total_to_process)
 
     try:
-        if args.workers and args.workers > 1:
-            with ProcessPoolExecutor(max_workers=args.workers) as executor:
-                futures = {
-                    executor.submit(
-                        _process_input_worker,
-                        prepared.original.name,
-                        str(prepared.resolved),
-                    ): prepared.original.name
-                    for prepared in remaining_inputs
-                }
-                completed = 0
-                for future in as_completed(futures):
-                    name, result = future.result()
-                    completed += 1
-                    _log_progress(completed, total_to_process, name)
-                    append_single_result(output, name, result)
-                    _append_audit_entries(audit_path, [(name, result)], run_id)
-                    processed_set.add(name)
-                    state_processed.add(name)
-                    if completed % checkpoint_interval == 0:
-                        state["processed_files"] = sorted(state_processed)
-                        state["last_update"] = datetime.now().isoformat()
-                        state["completed"] = False
-                        _save_state(run_id, state)
-        else:
-            for idx, prepared in enumerate(remaining_inputs, start=1):
-                _log_progress(idx, total_to_process, prepared.original.name)
-                result = process_zip(prepared.resolved)
-                append_single_result(output, prepared.original.name, result)
-                _append_audit_entries(audit_path, [(prepared.original.name, result)], run_id)
-                processed_set.add(prepared.original.name)
-                state_processed.add(prepared.original.name)
-                if idx % checkpoint_interval == 0:
-                    state["processed_files"] = sorted(state_processed)
-                    state["last_update"] = datetime.now().isoformat()
-                    state["completed"] = False
-                    _save_state(run_id, state)
+        for idx, prepared in enumerate(remaining_inputs, start=1):
+            _log_progress(idx, total_to_process, prepared.original.name)
+            result = process_zip(prepared.resolved)
+            append_single_result(output, prepared.original.name, result)
+            _append_audit_entries(audit_path, [(prepared.original.name, result)], run_id)
+            processed_set.add(prepared.original.name)
+            state_processed.add(prepared.original.name)
+            if idx % checkpoint_interval == 0:
+                state["processed_files"] = sorted(state_processed)
+                state["last_update"] = datetime.now().isoformat()
+                state["completed"] = False
+                _save_state(run_id, state)
     finally:
         if temp_dir:
             temp_dir.cleanup()
