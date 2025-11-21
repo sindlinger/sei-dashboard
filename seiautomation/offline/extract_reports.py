@@ -2191,16 +2191,25 @@ def main() -> None:
     checkpoint_interval = max(1, args.checkpoint_interval)
     total_to_process = len(remaining_inputs)
     _log(f"Lista de trabalho: {total_to_process} arquivo(s) | workers={args.workers} | checkpoint a cada {checkpoint_interval}.")
+
+    file_sizes = {prepared.original.name: Path(prepared.resolved).stat().st_size for prepared in remaining_inputs}
+    checkpoint_bytes = 0
+    checkpoint_start = time.time()
     _print_header(run_id, log_path, total_to_process)
 
     def consolidate_checkpoint(final: bool = False) -> None:
+        nonlocal checkpoint_bytes, checkpoint_start
         state["processed_files"] = sorted(state_processed)
         state["last_update"] = datetime.now().isoformat()
         state["completed"] = final
         _save_state(run_id, state)
         # consolida todos parquets existentes em Excel
         consolidate_parquets(parquet_dir, output)
-        _log(f"Checkpoint salvo ({len(state_processed)} registros).")
+        elapsed = time.time() - checkpoint_start
+        mbps = (checkpoint_bytes / 1e6) / elapsed if elapsed > 0 else 0
+        _log(f"Checkpoint salvo ({len(state_processed)} registros) | {checkpoint_bytes/1e6:.1f} MB em {elapsed:.1f}s ({mbps:.2f} MB/s).")
+        checkpoint_bytes = 0
+        checkpoint_start = time.time()
 
     try:
         t0 = time.time()
@@ -2221,6 +2230,7 @@ def main() -> None:
                 _log_progress(completed, total_to_process, name)
                 processed_set.add(name)
                 state_processed.add(name)
+                checkpoint_bytes += file_sizes.get(name, 0)
                 if completed % checkpoint_interval == 0:
                     consolidate_checkpoint(final=False)
         elapsed = time.time() - t0
