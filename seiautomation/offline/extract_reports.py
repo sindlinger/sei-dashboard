@@ -1377,31 +1377,24 @@ def _apply_species_mapping(
     especie_clean = especie.strip(" \t-–:;")
     if not especie_clean:
         return
-    _set_field(
-        result,
-        "ESPÉCIE DE PERÍCIA",
-        especie_clean,
-        source_doc,
-        pattern="especie_label",
-        context_text=context_text,
-        weight=weight,
-    )
-    entry = matched_entry or _match_honorarios_entry(especie_clean)
+
+    entry = matched_entry or _match_honorarios_entry(especie_clean) or _match_alias(especie_clean)
+
+    # Se não casar com a tabela/alias, não preenche (evita falso positivo) mas registra observação
     if not entry:
-        entry = _match_alias(especie_clean)
-    if not entry:
+        _add_obs(result, f"ESPÉCIE DE PERÍCIA não reconhecida: {especie_clean[:60]}")
         return
     especie_oficial = entry.get("DESCRICAO", especie_clean)
     tabela_source = source_doc or "tabela_honorarios"
-    if especie_oficial:
-        _set_field(
-            result,
-            "ESPÉCIE DE PERÍCIA",
-            especie_oficial,
-            tabela_source,
-            pattern="tabela_honorarios",
-            weight=weight + 0.1,
-        )
+
+    _set_field(
+        result,
+        "ESPÉCIE DE PERÍCIA",
+        especie_oficial,
+        tabela_source,
+        pattern="tabela_honorarios",
+        weight=weight + 0.1,
+    )
     fator = entry.get("ID", "")
     if fator and not result.data.get("Fator"):
         _set_field(
