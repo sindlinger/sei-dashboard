@@ -785,6 +785,26 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
         _set_field(res, "ESPECIALIDADE", perito_info.especialidade, source_doc, pattern="perito_info", context_text=lookup_text)
     else:
         _set_field(res, "ESPECIALIDADE", _line_value(lines, ESPECIALIDADE_LABELS), source_doc, pattern="especialidade_labels", context_text=lookup_text, weight=0.9)
+
+    # Interessado: Nome – Perito(a) Profissão – email (se existir)
+    if not perito_info.nome or not res.data.get("ESPECIALIDADE"):
+        int_info = _extract_interessado_info(lookup_text)
+        if int_info.nome and not res.data.get("PERITO"):
+            _set_field(res, "PERITO", int_info.nome, source_doc, pattern="interessado", context_text=lookup_text, weight=0.85)
+        if int_info.especialidade and not res.data.get("ESPECIALIDADE"):
+            _set_field(res, "ESPECIALIDADE", int_info.especialidade, source_doc, pattern="interessado", context_text=lookup_text, weight=0.85)
+        # usar especialidade para sugerir espécie
+        if int_info.especialidade and not res.data.get("ESPÉCIE DE PERÍCIA"):
+            alias_entry = _match_alias(int_info.especialidade)
+            if alias_entry:
+                _apply_species_mapping(
+                    res,
+                    alias_entry.get("DESCRICAO", int_info.especialidade),
+                    source_doc,
+                    context_text=lookup_text,
+                    weight=0.8,
+                    matched_entry=alias_entry,
+                )
     especie = _extract_especie_from_text(lines, lookup_text)
     if especie:
         _apply_species_mapping(res, especie, source_doc, context_text=lookup_text, weight=1.0)
@@ -1132,6 +1152,31 @@ def _extract_perito_info(lines: Sequence[str]) -> PeritoInfo:
         prof_match = re.search(r"profiss[aã]o\s*[:\-]?\s*([A-Za-zÀ-ÿ ]+)", doc_text, re.IGNORECASE)
         if prof_match:
             info.profissao = prof_match.group(1).strip()
+    return info
+
+
+INTERESSADO_PATTERN = re.compile(
+    r"interessad[oa]:?\s*(?P<nome>[^\n–\-]+?)\s*[–\-]\s*(?P<prof>[^\n–\-]+?)(?:\s*[–\-]\s*(?P<email>\S+@\S+))?",
+    re.IGNORECASE,
+)
+
+
+def _extract_interessado_info(text: str) -> PeritoInfo:
+    info = PeritoInfo()
+    if not text:
+        return info
+    match = INTERESSADO_PATTERN.search(text)
+    if not match:
+        return info
+    nome = match.group("nome").strip()
+    prof = match.group("prof").strip()
+    email = (match.group("email") or "").strip()
+    if nome:
+        info.nome = nome
+    if prof:
+        # remover prefixo perito/perita
+        info.especialidade = re.sub(r"^perit[oa]\s+", "", prof, flags=re.IGNORECASE).strip()
+    info.profissao = info.especialidade
     return info
 
 
