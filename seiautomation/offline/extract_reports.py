@@ -77,6 +77,11 @@ PHASE_COLOR = "\033[96m"  # ciano claro (mais ameno)
 RESET_COLOR = "\033[0m"
 
 
+def _add_obs(result: "ExtractionResult", message: str) -> None:
+    if message not in result.observations:
+        result.observations.append(message)
+
+
 def _generate_run_id() -> str:
     return f"extract-{datetime.now():%Y%m%d-%H%M%S}-{uuid4().hex[:6]}"
 
@@ -737,8 +742,10 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
     lines = _prepare_lines(lookup_text)
     doc_origin = _classify_arbitration_doc(source_doc, lookup_text)
 
-    processo_cnj = _sanitize_cnj(_find_first(PROCESSO_NUM_PATTERN, lookup_text))
+    cnj_raw = _find_first(PROCESSO_NUM_PATTERN, lookup_text)
+    processo_cnj = _sanitize_cnj(cnj_raw)
     _set_field(res, "PROCESSO Nº", processo_cnj, source_doc, pattern="processo_regex", context_text=lookup_text)
+    _validate_cnj(cnj_raw, processo_cnj, res)
     _set_field(res, "PROCESSO ADMIN. Nº", _extract_admin_number(lookup_text), source_doc, pattern="admin_regex", context_text=lookup_text)
     _set_field(res, "JUÍZO", _find_first(JUÍZO_PATTERN, lookup_text), source_doc, pattern="juizo_regex", context_text=lookup_text)
     _set_field(res, "COMARCA", _find_first(COMARCA_PATTERN, lookup_text), source_doc, pattern="comarca_regex", context_text=lookup_text)
@@ -911,6 +918,11 @@ def _sanitize_cnj(value: str) -> str:
         calculated = 1
     dv_calc = f"{calculated:02d}"
     return value if dv_calc == dv else ""
+
+
+def _validate_cnj(raw_value: str, sanitized: str, result: "ExtractionResult") -> None:
+    if raw_value and not sanitized:
+        _add_obs(result, "PROCESSO Nº inválido (dígitos de verificação)")
 
 
 def _set_field(
@@ -1490,6 +1502,22 @@ def _is_valid_doc(doc: str) -> bool:
     return False
 
 
+def _is_numeric(value: str) -> bool:
+    if value is None:
+        return False
+    v = str(value).strip()
+    return bool(v) and v.replace(",", ".").replace("-", "").replace(" ", "").replace(".", "").isdigit()
+
+
+def _is_money(value: str) -> bool:
+    if not value:
+        return False
+    v = str(value).strip()
+    # aceita R$ opcional, separador de milhar com ponto e decimal com vírgula
+    pattern = re.compile(r"^\s*(?:R\$\s*)?\d{1,3}(?:\.\d{3})*(?:,\d{2})\s*$")
+    return bool(pattern.match(v))
+
+
 def _validate_date(value: str) -> str:
     if not value:
         return ""
@@ -1968,6 +1996,33 @@ def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
     _ensure_comarca_from_juizo(result)
 
 
+def _validate_numeric_fields(result: "ExtractionResult") -> None:
+    """Valida campos numéricos e registra observações se inválidos."""
+
+    # CPF/CNPJ: precisa ser válido; se o campo existe mas não valida, anotar
+    doc = result.data.get("CPF/CNPJ", "") or ""
+    if doc and not _is_valid_doc(doc):
+        _add_obs(result, "CPF/CNPJ inválido")
+
+    # Fator: deve ser número
+    fator = result.data.get("Fator", "") or ""
+    if fator and not _is_numeric(fator.replace("%", "")):
+        _add_obs(result, "Fator inválido (não numérico)")
+
+    # Valores monetários
+    money_fields = [
+        "VALOR ARBITRADO",
+        "VALOR ARBITRADO - DE",
+        "VALOR ARBITRADO - CM",
+        "Valor Tabelado Anexo I - Tabela I",
+        "SALDO A RECEBER",
+    ]
+    for field in money_fields:
+        val = result.data.get(field, "") or ""
+        if val and not _is_money(val):
+            _add_obs(result, f"{field} inválido (não monetário)")
+
+
 def _load_existing_parquet_names(parquet_dir: Path) -> set[str]:
     """Retorna nomes de ZIP que já possuem parquet salvo."""
     if not parquet_dir.exists():
@@ -1980,6 +2035,7 @@ def process_and_save_parquet(zip_name: str, resolved_path: str, parquet_dir: str
     path = Path(resolved_path)
     result = process_zip(path)
     _scrub_perito_conflicts(result)
+    _validate_numeric_fields(result)
     pdir = Path(parquet_dir)
     pdir.mkdir(parents=True, exist_ok=True)
     tmp_path = pdir / f"{zip_name}.parquet.tmp"
