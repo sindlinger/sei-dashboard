@@ -2008,44 +2008,7 @@ def append_single_result(
     Acrescenta um único resultado no XLSX sem acumular em memória.
     Cria o arquivo se não existir.
     """
-    if output.exists():
-        wb = load_workbook(output)
-        if "Pericias" not in wb.sheetnames:
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Pericias"
-            ws.append(COLUMNS)
-            wb.create_sheet("Pendencias").append(COLUMNS)
-            fontes = wb.create_sheet("Fontes")
-            fontes.append([
-                "Nº DE PERÍCIAS",
-                "Campo",
-                "Valor",
-                "Documento Fonte",
-                "Pattern/Heurística",
-                "Snippet",
-                "Page",
-                "Start",
-                "End",
-                "ZIP",
-            ])
-            candidatos = wb.create_sheet("Candidatos")
-            candidatos.append([
-                "Nº DE PERÍCIAS",
-                "Campo",
-                "Valor",
-                "Peso",
-                "Fonte",
-                "Pattern/Heurística",
-                "Snippet",
-                "Start",
-                "End",
-                "ZIP",
-            ])
-            start_index = 0
-        else:
-            start_index = max(0, wb["Pericias"].max_row - 1)
-    else:
+    def _new_workbook() -> tuple[Workbook, int]:
         wb = Workbook()
         ws = wb.active
         ws.title = "Pericias"
@@ -2077,7 +2040,20 @@ def append_single_result(
             "End",
             "ZIP",
         ])
-        start_index = 0
+        return wb, 0
+
+    if output.exists():
+        try:
+            wb = load_workbook(output)
+            if "Pericias" not in wb.sheetnames:
+                wb, start_index = _new_workbook()
+            else:
+                start_index = max(0, wb["Pericias"].max_row - 1)
+        except Exception:
+            # arquivo corrompido; recria
+            wb, start_index = _new_workbook()
+    else:
+        wb, start_index = _new_workbook()
 
     _append_results_to_workbook(wb, start_index, [(zip_name, result)])
     wb.save(output)
