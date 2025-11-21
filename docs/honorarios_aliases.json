@@ -1,21 +1,161 @@
 [
   {
+    "target_id": "1.1A",
+    "keywords": [
+      "grafotecnico",
+      "grafotecnica",
+      "grafoscopia",
+      "grafoscopico",
+      "grafoscopica",
+      "grafocopista",
+      "assinatura falsa",
+      "falsificacao de assinatura",
+      "laudo grafotecnico"
+    ]
+  },
+  {
+    "target_id": "2.1",
+    "keywords": [
+      "engenharia",
+      "engenheiro",
+      "engenheira",
+      "engenheiro civil",
+      "engenheiro eletrico",
+      "engenheiro elétrico",
+      "engenheiro mecanico",
+      "engenheiro mecânico",
+      "engenheiro de seguranca",
+      "engenheiro de segurança",
+      "engenharia civil",
+      "engenharia eletrica",
+      "engenharia elétrica",
+      "engenharia mecanica",
+      "engenharia mecânica",
+      "perito engenheiro",
+      "perita engenheira",
+      "crea",
+      "arquitetura",
+      "arquiteto",
+      "arquiteta",
+      "laudo estrutural",
+      "vistoria predial",
+      "avaliacao estrutural",
+      "laudo de engenharia"
+    ]
+  },
+  {
+    "target_id": "2.3",
+    "keywords": [
+      "condicoes estruturais",
+      "condições estruturais",
+      "estabilidade do imovel",
+      "solidez do imovel",
+      "vicio construtivo",
+      "vício construtivo",
+      "patologia de concreto"
+    ]
+  },
+  {
+    "target_id": "2.4",
+    "keywords": [
+      "avaliacao de bens",
+      "avaliacao mercadologica",
+      "avaliacao mercadológica",
+      "avaliacao de bem rural",
+      "avaliacao de bem urbano",
+      "avaliacao de veiculo",
+      "avaliacao de bens moveis"
+    ]
+  },
+  {
+    "target_id": "2.5",
+    "keywords": [
+      "demarcatoria",
+      "demarcatória",
+      "acao demarcatoria",
+      "ação demarcatória",
+      "divisao de terras",
+      "divisão de terras"
+    ]
+  },
+  {
+    "target_id": "2.6",
+    "keywords": [
+      "insalubridade",
+      "periculosidade",
+      "ltcat",
+      "ppra",
+      "perito de seguranca",
+      "perito de segurança",
+      "seguranca do trabalho",
+      "segurança do trabalho"
+    ]
+  },
+  {
+    "target_id": "2.7",
+    "keywords": [
+      "engenharia outros",
+      "engenharia diversa"
+    ]
+  },
+  {
+    "target_id": "3.1",
+    "keywords": [
+      "interdicao",
+      "interdição",
+      "curatela",
+      "curador",
+      "curadora"
+    ]
+  },
+  {
+    "target_id": "3.2",
+    "keywords": [
+      "dano fisico",
+      "dano físico",
+      "dano estetico",
+      "dano estético",
+      "lesao corporal",
+      "lesão corporal",
+      "deformidade",
+      "estetico"
+    ]
+  },
+  {
     "target_id": "3.3",
     "keywords": [
       "pericia medica",
+      "perícia médica",
       "perito medico",
       "perita medica",
+      "medico",
+      "medica",
+      "medico psiquiatra",
+      "psiquiatra",
+      "pericia psiquiatrica",
+      "pericia psiquiátrica",
       "pericia medica trabalhista",
-      "pericia medica judicial"
+      "pericia medica judicial",
+      "pericia odontologica",
+      "pericia odontológica",
+      "odontologo",
+      "odontologa"
     ]
   },
   {
     "target_id": "4.1",
     "keywords": [
       "pericia psicologica",
+      "perícia psicológica",
       "psicologo",
       "psicologa",
-      "avaliacao psicologica"
+      "avaliacao psicologica",
+      "avaliacao psicológica",
+      "entrevista forense",
+      "entrevistador forense",
+      "entrevistadora forense",
+      "perito psicologo",
+      "perita psicologa"
     ]
   },
   {
@@ -23,15 +163,36 @@
     "keywords": [
       "assistente social",
       "servico social",
-      "estudo social"
+      "serviço social",
+      "estudo social",
+      "relatorio social",
+      "relatório social",
+      "parecer social",
+      "entrevistador forense assistente social",
+      "entrevistadora forense assistente social"
     ]
   },
   {
-    "target_id": "1.1A",
+    "target_id": "6.1",
     "keywords": [
-      "grafotecnico",
-      "grafotecnica",
-      "laudo grafotecnico"
+      "avaliacao comercial de imovel",
+      "avaliacao comercial de imóvel",
+      "avaliacao de imovel",
+      "avaliacao de imóvel",
+      "avaliacao mercadologica de imovel",
+      "avaliacao mercadológica de imóvel",
+      "vistoria imobiliaria",
+      "vistoria imobiliária",
+      "laudo de avaliacao de imovel"
+    ]
+  },
+  {
+    "target_id": "6.2",
+    "keywords": [
+      "corretor de imoveis",
+      "corretor de imóveis",
+      "avaliacao por corretor",
+      "laudo por corretor"
     ]
   }
 ]
