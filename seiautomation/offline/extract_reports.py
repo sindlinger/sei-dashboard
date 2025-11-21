@@ -27,6 +27,9 @@ from .doc_classifier import DocumentBucket, classify_document
 _PERITO_CATALOG_PATH = Path("outputs/banco-peritos/peritos_catalogo_final.csv")
 _PERITO_NAME_SET: set[str] | None = None
 
+_PERITO_CATALOG_PATH = Path("outputs/banco-peritos/peritos_catalogo_final.csv")
+_PERITO_NAME_SET: set[str] | None = None
+
 BUCKET_ORDER = [
     DocumentBucket.PRINCIPAL,
     DocumentBucket.APOIO,
@@ -1842,6 +1845,83 @@ def _date_near_requisition(text: str) -> str:
 def _snippet_has_keyword(snippet: str) -> bool:
     return any(keyword in snippet for keyword in REQUISITION_KEYWORDS)
 
+
+def _norm_name(value: str | None) -> str:
+    if not value:
+        return ""
+    value = value.strip().lower()
+    return "".join(c for c in unicodedata.normalize("NFD", value) if unicodedata.category(c) != "Mn")
+
+
+def _load_perito_catalog() -> tuple[set[str], dict[str, str]]:
+    """Retorna (nomes_normalizados, mapa_nome_normalizado->CPF) do catálogo externo."""
+    global _PERITO_NAME_SET
+    names: set[str] = set()
+    name_to_cpf: dict[str, str] = {}
+    try:
+        if _PERITO_CATALOG_PATH.exists():
+            import pandas as pd
+
+            df = pd.read_csv(_PERITO_CATALOG_PATH)
+            if "PERITO" in df.columns:
+                for _, row in df.iterrows():
+                    n = _norm_name(str(row.get("PERITO", "")))
+                    if not n:
+                        continue
+                    names.add(n)
+                    cpf = str(row.get("CPF/CNPJ", "")).strip()
+                    if cpf:
+                        name_to_cpf[n] = cpf
+    except Exception:
+        names = set()
+        name_to_cpf = {}
+    _PERITO_NAME_SET = names
+    return names, name_to_cpf
+
+
+def _ensure_comarca_from_juizo(result: "ExtractionResult") -> None:
+    juizo = (result.data.get("JUÍZO") or "").lower()
+    comarca = result.data.get("COMARCA", "") or ""
+    if not juizo:
+        return
+    if not comarca:
+        # padrão "comarca de xxxx"
+        import re
+
+        m = re.search(r"comarca\s+de\s+([a-zçãáâêéíóõú\s]+)", juizo)
+        if m:
+            comarca_val = m.group(1).strip().title()
+            result.data["COMARCA"] = comarca_val
+            return
+    # casos "... Vara ... da capital"
+    if "capital" in juizo:
+        result.data["COMARCA"] = "João Pessoa"
+
+
+def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
+    """Remove perito em campos de partes e ajusta CPF do perito pelo catálogo."""
+    perito_names, name_to_cpf = _load_perito_catalog()
+
+    # limpar partes que coincidam com perito
+    for field in ("PROMOVENTE", "PROMOVIDO"):
+        value = result.data.get(field, "")
+        if value and _norm_name(value) in perito_names:
+            result.data[field] = ""
+            result.observations.append(f"{field} coincidia com nome de perito; valor removido")
+
+    # ajustar CPF do perito usando catálogo
+    perito_nome = result.data.get("PERITO", "") or ""
+    if perito_nome:
+        norm = _norm_name(perito_nome)
+        cat_cpf = name_to_cpf.get(norm, "")
+        if cat_cpf:
+            current_cpf = result.data.get("CPF/CNPJ", "") or ""
+            if current_cpf != cat_cpf:
+                result.data["CPF/CNPJ"] = cat_cpf
+                result.observations.append("CPF do perito ajustado pelo catálogo externo")
+
+    # garantir comarca a partir do juízo
+    _ensure_comarca_from_juizo(result)
 
 def _norm_name(value: str | None) -> str:
     if not value:
