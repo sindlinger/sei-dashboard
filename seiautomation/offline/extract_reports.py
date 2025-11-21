@@ -115,7 +115,7 @@ def _cleanup_old_logs(days: int) -> None:
     if days <= 0 or not LOG_DIR.exists():
         return
     cutoff = datetime.now() - timedelta(days=days)
-    for pattern in ("extract-*.log", "extract-*.state.json"):
+    for pattern in ("extract-*.log", "extract-*.state.json", "extract-*.sources.jsonl"):
         for file in LOG_DIR.glob(pattern):
             try:
                 if datetime.fromtimestamp(file.stat().st_mtime) < cutoff:
@@ -2231,6 +2231,21 @@ def main() -> None:
         help="Remove logs/checkpoints com mais de N dias (0 desativa).",
     )
     parser.add_argument(
+        "--no-log-cleanup",
+        action="store_true",
+        help="Não varre logs antigos no início (evita demora em disco com muitas execuções).",
+    )
+    parser.add_argument(
+        "--no-run-log",
+        action="store_true",
+        help="Alias de --no-file-log (não grava .log em disco, só console).",
+    )
+    parser.add_argument(
+        "--no-audit-log",
+        action="store_true",
+        help="Não grava JSONL de fontes/offsets em logs/extract/*.sources.jsonl.",
+    )
+    parser.add_argument(
         "--no-file-log",
         action="store_true",
         help="Não grava .log em disco (útil quando o logger está lento; mantém saída no console).",
@@ -2245,12 +2260,17 @@ def main() -> None:
         state = _load_state(run_id)
     else:
         run_id = args.run_id or _generate_run_id()
-        if args.log_retention_days:
+        if not args.no_log_cleanup and args.log_retention_days:
+            t_clean = time.perf_counter()
             _cleanup_old_logs(args.log_retention_days)
+            t_start = _log_phase("Limpeza de logs antigos", t_clean, t_start)
         state = {"run_id": run_id, "created_at": datetime.now().isoformat()}
 
-    log_path = _setup_logger(run_id, disable_file_log=args.no_file_log)
-    audit_path = LOG_DIR / f"{run_id}.sources.jsonl"
+    no_file_log = args.no_file_log or args.no_run_log
+    t_logger = time.perf_counter()
+    log_path = _setup_logger(run_id, disable_file_log=no_file_log)
+    t_start = _log_phase("Inicialização do logger", t_logger, t_start)
+    audit_path = None if args.no_audit_log else LOG_DIR / f"{run_id}.sources.jsonl"
     _log(f"Executando extração (run-id={run_id}) - log: {log_path}")
     zip_paths: list[Path] = []
     pdf_paths: list[Path] = []
