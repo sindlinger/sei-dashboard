@@ -1,0 +1,14 @@
+{
+  "run_id": "export-dataset-052655",
+  "created_at": "2025-11-20T05:26:57.904273",
+  "output": "relatorio-pericias.xlsx",
+  "processed_files": [
+    "0001210.pdf",
+    "000121442024815.pdf",
+    "0001344.pdf",
+    "000183702024815.pdf",
+    "000206642024815.pdf"
+  ],
+  "last_update": "2025-11-20T05:32:21.115467",
+  "completed": true
+}

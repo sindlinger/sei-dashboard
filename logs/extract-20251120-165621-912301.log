@@ -1,0 +1,5 @@
+2025-11-20 16:56:21,539 [INFO] Executando extração (run-id=extract-20251120-165621-912301) - log: /mnt/b/dev/sei-dashboard/logs/extract-20251120-165621-912301.log
+2025-11-20 16:56:21,542 [INFO] Processando 1 arquivo(s) com 16 worker(s).
+2025-11-20 16:56:22,728 [INFO] Concluído 000219_17_2025_8_15_SEI_000219_17.2025.8.15.zip (1/1)
+2025-11-20 16:56:22,781 [INFO] Checkpoint salvo (1 registros no total).
+2025-11-20 16:56:22,781 [INFO] Relatório salvo/atualizado em tmp/test-relatorio.xlsx

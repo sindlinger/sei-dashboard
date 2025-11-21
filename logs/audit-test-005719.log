@@ -1,0 +1,6 @@
+2025-11-20 00:57:21,045 [INFO] Executando extração (run-id=audit-test-005719) - log: /mnt/b/dev/sei-dashboard/logs/audit-test-005719.log
+2025-11-20 01:03:14,445 [INFO] Processando 2 arquivo(s) com 1 worker(s).
+2025-11-20 01:03:14,445 [INFO] Processando 0001210.pdf (1/2)...
+2025-11-20 01:03:14,829 [INFO] Processando 000121442024815.pdf (2/2)...
+2025-11-20 01:03:45,953 [INFO] Checkpoint salvo (2 registros no total).
+2025-11-20 01:03:45,953 [INFO] Relatório salvo/atualizado em relatorio-pericias.xlsx

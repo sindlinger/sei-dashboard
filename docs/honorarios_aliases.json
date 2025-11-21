@@ -1,0 +1,37 @@
+[
+  {
+    "target_id": "3.3",
+    "keywords": [
+      "pericia medica",
+      "perito medico",
+      "perita medica",
+      "pericia medica trabalhista",
+      "pericia medica judicial"
+    ]
+  },
+  {
+    "target_id": "4.1",
+    "keywords": [
+      "pericia psicologica",
+      "psicologo",
+      "psicologa",
+      "avaliacao psicologica"
+    ]
+  },
+  {
+    "target_id": "5.1",
+    "keywords": [
+      "assistente social",
+      "servico social",
+      "estudo social"
+    ]
+  },
+  {
+    "target_id": "1.1A",
+    "keywords": [
+      "grafotecnico",
+      "grafotecnica",
+      "laudo grafotecnico"
+    ]
+  }
+]

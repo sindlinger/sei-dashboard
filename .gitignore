@@ -1,0 +1,19 @@
+# Arquivos de segredos locais
+.env.playwright
+AgentsFiles-to-tester_folder_terminals/
+peritos_catalogo.csv
+sample_relatorio.xlsx
+playwright-downloads/
+ml/.venv/
+ml/datasets/
+ml/models/
+ml/logs/
+ml/data/
+ml/artifacts/
+ml/tmp/
+qa/__pycache__/
+qa/*.pyc
+qa/dataset-*.jsonl
+seiautomation/__pycache__/
+tmp/
+*.pyc

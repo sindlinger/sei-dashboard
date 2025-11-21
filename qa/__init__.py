@@ -1,0 +1,1 @@
+"""Pacote QA (recuperado)."""

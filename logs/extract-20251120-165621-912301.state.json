@@ -1,0 +1,10 @@
+{
+  "run_id": "extract-20251120-165621-912301",
+  "created_at": "2025-11-20T16:56:21.538349",
+  "output": "tmp/test-relatorio.xlsx",
+  "processed_files": [
+    "000219_17_2025_8_15_SEI_000219_17.2025.8.15.zip"
+  ],
+  "last_update": "2025-11-20T16:56:22.778804",
+  "completed": true
+}

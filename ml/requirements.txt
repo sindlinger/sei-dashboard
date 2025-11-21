@@ -1,0 +1,9 @@
+# Dependências adicionais específicas de QA/ML.
+# Instale o PyTorch separado (ex.: cu121) antes de rodar este arquivo.
+transformers==4.46.3
+datasets==2.19.1
+evaluate==0.4.1
+accelerate==0.34.2
+sentencepiece==0.2.1
+protobuf==6.33.1
+tiktoken==0.12.0
