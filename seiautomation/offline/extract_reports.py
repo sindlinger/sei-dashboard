@@ -1869,8 +1869,15 @@ def _load_perito_catalog() -> set[str]:
 
 
 def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
-    """Se PROMOVENTE/PROMOVIDO coincidirem com nomes de peritos, limpa e registra observação."""
+    """Resolve conflitos e enriquece dados de perito usando catálogo externo."""
+    perito_df = None
+    try:
+        perito_df = pd.read_csv(_PERITO_CATALOG_PATH) if _PERITO_CATALOG_PATH.exists() else None
+    except Exception:
+        perito_df = None
     perito_names = _load_perito_catalog()
+
+    # 1) Promovente/Promovido não podem ser perito
     for field in ("PROMOVENTE", "PROMOVIDO"):
         value = result.data.get(field, "")
         if not value:
@@ -1878,6 +1885,18 @@ def _scrub_perito_conflicts(result: "ExtractionResult") -> None:
         if _norm_name(value) in perito_names:
             result.data[field] = ""
             result.observations.append(f"{field} coincidia com nome de perito; valor removido")
+
+    # 2) Enriquecer CPF/perito a partir do catálogo quando faltante ou divergente
+    perito_nome = result.data.get("PERITO", "") or ""
+    perito_cpf = result.data.get("CPF/CNPJ", "") or ""
+    if perito_df is not None and perito_nome:
+        norm = _norm_name(perito_nome)
+        matches = perito_df[perito_df["PERITO"].apply(_norm_name) == norm]
+        if not matches.empty:
+            cat_cpf = str(matches.iloc[0].get("CPF/CNPJ", "")).strip()
+            if cat_cpf and cat_cpf != perito_cpf:
+                result.data["CPF/CNPJ"] = cat_cpf
+                result.observations.append("CPF do perito ajustado pelo catálogo externo")
 
 
 def _load_existing_parquet_names(parquet_dir: Path) -> set[str]:
