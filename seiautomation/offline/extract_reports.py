@@ -1290,9 +1290,14 @@ def _extract_especie_from_text(lines: Sequence[str], text: str) -> str:
 
 def _guess_species_from_specialty(info: PeritoInfo) -> dict[str, str] | None:
     for text in (info.especialidade, info.profissao):
-        entry = _match_alias(text)
-        if entry:
-            return entry
+        if not text:
+            continue
+        # suportar múltiplas profissões separadas por barra, vírgula, ponto e vírgula ou " e "
+        parts = re.split(r"[\\/;,]|\\be\\b", text, flags=re.IGNORECASE)
+        for part in parts:
+            entry = _match_alias(part.strip())
+            if entry:
+                return entry
     return None
 
 
@@ -1345,6 +1350,12 @@ def _clean_especie_candidate(value: str) -> str:
         if pat.match(v):
             return ""
     return v
+
+
+def _species_from_id(target_id: str) -> dict[str, str] | None:
+    if not target_id or not HONORARIOS_BY_ID:
+        return None
+    return HONORARIOS_BY_ID.get(target_id)
 
 
 def _format_currency_value(value: str | float) -> str:
