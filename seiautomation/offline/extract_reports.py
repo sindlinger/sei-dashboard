@@ -73,6 +73,8 @@ BUCKET_REQUIREMENTS = _build_bucket_requirements()
 INVALID_EXCEL_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 LOG_DIR = Path(__file__).resolve().parents[2] / "logs" / "extract"
 LOGGER = logging.getLogger("extract_reports")
+PHASE_COLOR = "\033[94m"  # azul claro
+RESET_COLOR = "\033[0m"
 
 
 def _generate_run_id() -> str:
@@ -125,6 +127,16 @@ def _log(message: str) -> None:
     print(message)
     if LOGGER.handlers:
         LOGGER.info(message)
+
+
+def _log_phase(label: str, start: float, base: float) -> float:
+    """Loga duração da fase em azul claro e retorna o timestamp atual."""
+
+    now = time.perf_counter()
+    delta = now - start
+    total = now - base
+    _log(f"{PHASE_COLOR}⏱ {label}: {delta:.2f}s (desde início: {total:.2f}s){RESET_COLOR}")
+    return now
 
 
 def _print_header(run_id: str, log_path: Path, total: int) -> None:
@@ -2180,6 +2192,8 @@ def append_single_result(
 
 
 def main() -> None:
+    t_start = time.perf_counter()
+
     parser = argparse.ArgumentParser(description="Extrai dados dos despachos do SEI a partir de arquivos locais.")
     parser.add_argument("--zip-dir", type=Path, help="Diretório com os arquivos ZIP.")
     parser.add_argument("--pdf-dir", type=Path, action="append", help="Diretório contendo PDFs avulsos (pode repetir).")
@@ -2245,6 +2259,7 @@ def main() -> None:
 
     total_size = sum(p.stat().st_size for p in zip_paths + pdf_paths + txt_paths)
     _log(f"Pré-flight ok | ZIPs: {len(zip_paths)} PDFs: {len(pdf_paths)} TXTs: {len(txt_paths)} | Tamanho total: {total_size/1e6:.1f} MB")
+    t_phase = _log_phase("Pré-flight (listar e medir arquivos)", t_start, t_start)
 
     total_expected = len(zip_paths) + len(pdf_paths) + len(txt_paths)
 
@@ -2290,6 +2305,7 @@ def main() -> None:
     _log(f"Lista de trabalho: {total_to_process} arquivo(s) | workers={args.workers} | checkpoint a cada {checkpoint_interval}.")
 
     file_sizes = {prepared.original.name: Path(prepared.resolved).stat().st_size for prepared in remaining_inputs}
+    t_phase = _log_phase("Preparar inputs e medir tamanhos pendentes", t_phase, t_start)
     checkpoint_bytes = 0
     checkpoint_start = time.time()
     _print_header(run_id, log_path, total_to_process)
@@ -2312,9 +2328,13 @@ def main() -> None:
 
     bad_files_total: set[str] = set()
 
+    first_result_logged = False
+
     try:
         t0 = time.time()
+        t_pool_start = time.perf_counter()
         with ProcessPoolExecutor(max_workers=max(1, args.workers)) as executor:
+            t_phase = _log_phase("Pool de workers criado", t_pool_start, t_start)
             futures = {
                 executor.submit(
                     process_and_save_parquet,
@@ -2327,6 +2347,9 @@ def main() -> None:
             completed = 0
             for future in as_completed(futures):
                 name, result = future.result()
+                if not first_result_logged:
+                    t_phase = _log_phase("Primeiro arquivo concluído", t_phase, t_start)
+                    first_result_logged = True
                 completed += 1
                 _log_progress(completed, total_to_process, name)
                 processed_set.add(name)
