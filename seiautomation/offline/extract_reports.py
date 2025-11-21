@@ -138,7 +138,8 @@ def _render_progress(completed: int, total: int) -> None:
     width = 40
     filled = int(width * pct)
     bar = "#" * filled + "-" * (width - filled)
-    print(f"\r[{bar}] {completed}/{total} ({pct*100:5.1f}%)", end="", flush=True)
+    # imprime em linha separada para não ser sobrescrito pelos logs
+    print(f"[{bar}] {completed}/{total} ({pct*100:5.1f}%)", flush=True)
 
 
 def _finish_progress() -> None:
