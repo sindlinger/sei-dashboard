@@ -65,10 +65,18 @@ def run_match(
         records = _prepare_records(prepared_inputs, fields, max_per_field=max_per_field)
         qa_inputs, metadata = _build_qa_inputs(records, fields, max_per_field=max_per_field)
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-        qa_pipe = pipeline("question-answering", model=model_name, tokenizer=tokenizer, device=device)
+        qa_pipe = pipeline(
+            "question-answering",
+            model=model_name,
+            tokenizer=tokenizer,
+            device=device,
+            handle_impossible_answer=True,
+            truncation=True,
+        )
         qa_payloads: Dict[str, Dict[str, List[dict]]] = {}
         if qa_inputs:
-            answers = qa_pipe(qa_inputs, batch_size=8, truncation=True)
+            # batch_size=1 e padding ajudam a evitar KeyError em mapeamentos char/token na HF
+            answers = qa_pipe(qa_inputs, batch_size=1, padding=True)
             if isinstance(answers, dict):
                 answers = [answers]
             for answer, (display_name, field, entry) in zip(answers, metadata):
