@@ -2202,9 +2202,5 @@ def main() -> None:
     _log(f"Relatório salvo/atualizado em {output}")
 
 
-    path = Path(resolved_path)
-    return display_name, process_zip(path)
-
-
 if __name__ == "__main__":
     main()
