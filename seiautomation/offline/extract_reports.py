@@ -1847,7 +1847,7 @@ def _snippet_has_keyword(snippet: str) -> bool:
 
 
 def _norm_name(value: str | None) -> str:
-    if not value:
+    if not value or not isinstance(value, str):
         return ""
     value = value.strip().lower()
     return "".join(c for c in unicodedata.normalize("NFD", value) if unicodedata.category(c) != "Mn")
