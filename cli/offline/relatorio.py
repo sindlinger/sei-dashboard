@@ -15,7 +15,8 @@ def register(subparsers) -> None:
     parser.add_argument("--txt-dir", dest="report_txt_dir", action="append", help="Diretórios extras com arquivos TXT (pode repetir).")
     parser.add_argument("--output", dest="report_output", default="relatorio-pericias.xlsx", help="Arquivo de saída.")
     parser.add_argument("--limit", dest="report_limit", type=int, help="Processa apenas os primeiros N arquivos (debug).")
-    # Execução é sempre sequencial; flag de workers suprimida
+    parser.add_argument("--workers", dest="report_workers", type=int, default=24, help="Workers paralelos (default=24).")
+    parser.add_argument("--checkpoint-interval", dest="report_checkpoint", type=int, default=25, help="Consolida Excel a cada N arquivos (default=25).")
     parser.add_argument("--full", dest="report_skip_existing", action="store_false", help="Reprocessa tudo (não pula linhas já presentes).")
     parser.set_defaults(report_skip_existing=True, handler=_run)
 
@@ -49,6 +50,10 @@ def _run(args, settings) -> int:
         cmd += ["--limit", str(args.report_limit)]
     if args.report_skip_existing:
         cmd.append("--skip-existing")
+    if args.report_workers:
+        cmd += ["--workers", str(args.report_workers)]
+    if args.report_checkpoint:
+        cmd += ["--checkpoint-interval", str(args.report_checkpoint)]
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as exc:
