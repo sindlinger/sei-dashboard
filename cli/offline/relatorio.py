@@ -14,7 +14,7 @@ def register(subparsers) -> None:
     parser.add_argument("--txt-dir", dest="report_txt_dir", action="append", help="Diretórios extras com arquivos TXT (pode repetir).")
     parser.add_argument("--output", dest="report_output", default="relatorio-pericias.xlsx", help="Arquivo de saída.")
     parser.add_argument("--limit", dest="report_limit", type=int, help="Processa apenas os primeiros N arquivos (debug).")
-    parser.add_argument("--workers", dest="report_workers", type=int, default=16, help="Workers paralelos (default=16).")
+    parser.add_argument("--workers", dest="report_workers", type=int, default=1, help=argparse.SUPPRESS)
     parser.add_argument("--full", dest="report_skip_existing", action="store_false", help="Reprocessa tudo (não pula linhas já presentes).")
     parser.set_defaults(report_skip_existing=True, handler=_run)
 
@@ -40,8 +40,7 @@ def _run(args, settings) -> int:
         cmd += ["--limit", str(args.report_limit)]
     if args.report_skip_existing:
         cmd.append("--skip-existing")
-    if args.report_workers and args.report_workers > 1:
-        cmd += ["--workers", str(args.report_workers)]
+    # workers desativados (execução sempre sequencial); flag ignorada
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as exc:

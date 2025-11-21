@@ -8,7 +8,6 @@ import logging
 import re
 import sys
 import unicodedata
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -2218,7 +2217,6 @@ def main() -> None:
     _log(f"Relatório salvo/atualizado em {output}")
 
 
-def _process_input_worker(display_name: str, resolved_path: str) -> tuple[str, ExtractionResult]:
     path = Path(resolved_path)
     return display_name, process_zip(path)
 
