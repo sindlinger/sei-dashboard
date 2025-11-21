@@ -2072,6 +2072,7 @@ def _append_results_to_workbook(
         "Nº DE PERÍCIAS",
         "Campo",
         "Valor",
+        "Escolhida",
         "Peso",
         "Fonte",
         "Pattern",
@@ -2113,12 +2114,20 @@ def _append_results_to_workbook(
                 ]
             )
         for field, entries in result.candidates.items():
+            chosen_meta = result.meta.get(field, {})
             for entry in entries:
+                chosen = (
+                    entry.get("value", "") == chosen_meta.get("value", "")
+                    and entry.get("source", "") == chosen_meta.get("source", "")
+                    and entry.get("start", None) == chosen_meta.get("start", None)
+                    and entry.get("end", None) == chosen_meta.get("end", None)
+                )
                 candidatos.append(
                     [
                         _safe_excel_value(f"{row_index:02d}"),
                         _safe_excel_value(field),
                         _safe_excel_value(entry.get("value", "")),
+                        _safe_excel_value("1" if chosen else ""),
                         _safe_excel_value(entry.get("weight", "")),
                         _safe_excel_value(entry.get("source", "")),
                         _safe_excel_value(entry.get("pattern", "")),
