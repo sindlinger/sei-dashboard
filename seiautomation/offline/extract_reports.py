@@ -293,6 +293,7 @@ COLUMNS = [
     "Valor Tabelado Anexo I - Tabela I",
     "VALOR ARBITRADO - DE",
     "VALOR ARBITRADO - CM",
+    "VALOR ARBITRADO - JZ",
     "VALOR ARBITRADO",
     "CHECAGEM",
     "DATA ADIANTAMENTO",
@@ -1193,7 +1194,7 @@ def _extract_interessado_info(text: str) -> PeritoInfo:
         return info
     # pega texto após o rótulo
     after = alvo
-    after = re.split(r"interessad[oa]\s*:?", after, flags=re.IGNORECASE, maxsplit=1)[-1].strip()
+    after = re.split(r"interessad[oa]\s*:?,?", after, flags=re.IGNORECASE, maxsplit=1)[-1].strip()
     if not after:
         return info
     # divide por traço ou vírgula (nome – profissão – email?)
@@ -1208,7 +1209,6 @@ def _extract_interessado_info(text: str) -> PeritoInfo:
         info.especialidade = prof
         info.profissao = prof
     return info
-
 
 def _extract_partes(lines: Sequence[str], text: str) -> tuple[str, str]:
     match = PARTES_REGEX.search(text)
@@ -1458,6 +1458,8 @@ def _classify_arbitration_doc(source_doc: str, context_text: str | None) -> str:
         return "DE"
     if "despacho" in name:
         return "DE"
+    if "sentenc" in name or "sentença" in name or "sentenc" in text or "sentença" in text:
+        return "JZ"
     return ""
 
 
@@ -1506,6 +1508,25 @@ def _record_arbitration_value(
             pattern="valor_arbitrado_de",
             context_text=context_text,
             weight=1.1,
+        )
+    elif doc_type == "JZ":
+        _set_field(
+            result,
+            "VALOR ARBITRADO - JZ",
+            value,
+            source_doc,
+            pattern="valor_arbitrado_jz",
+            context_text=context_text,
+            weight=1.05,
+        )
+        _set_field(
+            result,
+            "VALOR ARBITRADO",
+            value,
+            source_doc,
+            pattern="valor_arbitrado_jz",
+            context_text=context_text,
+            weight=1.05,
         )
     else:
         _set_field(
@@ -1826,6 +1847,10 @@ def process_zip(zip_path: Path) -> ExtractionResult:
     _apply_admin_fallback(result, context, zip_path.name)
     _fill_requisition_date(result, context)
     _fill_species_from_laudos(result, context.accepted_docs)
+    _refine_medical_specialty_from_council(result, context.accepted_docs)
+    _apply_medical_heuristics(result, context.accepted_docs)
+    _apply_contabilidade_heuristics(result)
+    _apply_engineering_heuristics(result)
     _ensure_honorarios_completion(result)
     text_for_validation = "\n".join(accepted_texts)
     _validate_result(result, context, zip_path.name, text_for_validation)
@@ -1966,6 +1991,180 @@ def _fill_species_from_laudos(result: ExtractionResult, documents: List[Document
                 break
 
 
+def _apply_medical_heuristics(result: ExtractionResult, documents: List[DocumentText]) -> None:
+    if result.data.get("ESPÉCIE DE PERÍCIA"):
+        return
+    text_pool = " ".join(doc.text for doc in documents) if documents else ""
+    text_lower = text_pool.lower()
+    prom = (result.data.get("PROMOVIDO") or "").lower()
+
+    inter_keywords = (
+        "interdicao", "interdição", "interditand", "interditad", "curatela", "curatelad",
+        "interdito", "interdita", "curador", "curadora", "curatelado", "curatelada",
+        "dna", "paternidade", "perfil genet", "perfil genético"
+    )
+    danos_keywords = (
+        "dano fisico", "dano físico", "dano estet", "dano estético", "lesao", "lesão",
+        "cicatriz", "cicatrização", "sequela", "sequelae", "desfiguracao", "desfiguração"
+    )
+
+    def any_kw(text, kws):
+        return any(k in text for k in kws)
+
+    if any_kw(text_lower, inter_keywords) or any_kw(prom, inter_keywords):
+        entry = _species_from_id("3.1")
+        if entry:
+            _apply_species_mapping(result, entry.get("DESCRICAO", ""), "heuristica_medica", context_text=None, weight=1.25, matched_entry=entry)
+        return
+
+    if any_kw(text_lower, danos_keywords):
+        entry = _species_from_id("3.2")
+        if entry:
+            _apply_species_mapping(result, entry.get("DESCRICAO", ""), "heuristica_medica", context_text=None, weight=1.1, matched_entry=entry)
+        return
+
+
+def _refine_medical_specialty_from_council(result: ExtractionResult, documents: List[DocumentText]) -> None:
+    """Se especialidade é médica/odontológica, tenta detectar CRM/CRO no laudo para fixar o conselho correto."""
+    esp = (result.data.get("ESPECIALIDADE") or "").lower()
+    if not esp:
+        return
+    if not ("med" in esp or "odont" in esp):
+        return
+    text_pool = " ".join(doc.text for doc in documents) if documents else ""
+    text_lower = text_pool.lower()
+    if "cro" in text_lower:
+        result.data["ESPECIALIDADE"] = "Odontologia"
+    elif "crm" in text_lower or "cfm" in text_lower:
+        result.data["ESPECIALIDADE"] = "Medicina"
+
+
+def _apply_contabilidade_heuristics(result: ExtractionResult) -> None:
+    """Heurística para contábil: especialidade contábil/econômica + ente público em PROMOVIDO → espécie 1.1."""
+    if result.data.get("ESPÉCIE DE PERÍCIA"):
+        return
+    esp = (result.data.get("ESPECIALIDADE") or "").lower()
+    prom = (result.data.get("PROMOVIDO") or "").lower()
+    contab_kw = (
+        "contabil", "contábil", "contador", "contadora", "econom", "perito cont", "perita cont",
+        "balanço", "balanco"
+    )
+    public_kw = (
+        "uniao", "união", "estado", "governo do estado", "fazenda publica", "fazenda pública",
+        "municipio", "município", "prefeitura", "inss", "câmara municipal", "camara municipal", "ente publico", "ente público"
+    )
+    if any(k in esp for k in contab_kw) and any(k in prom for k in public_kw):
+        entry = _species_from_id("1.1")
+        if entry:
+            _apply_species_mapping(
+                result,
+                entry.get("DESCRICAO", ""),
+                "heuristica_contabil",
+                context_text=None,
+                weight=1.2,
+                matched_entry=entry,
+            )
+        return
+
+
+def _apply_engineering_heuristics(result: ExtractionResult) -> None:
+    """Heurística para Engenharia (sem usar valores)."""
+    if result.data.get("ESPÉCIE DE PERÍCIA"):
+        return
+
+    esp = (result.data.get("ESPECIALIDADE") or "").lower()
+    prom = (result.data.get("PROMOVIDO") or "").lower()
+
+    eng_kw = ("engenh", "engenheiro", "engenheira", "arquit", "eng.")
+    public_kw = (
+        "uniao", "união", "estado", "governo do estado", "fazenda publica", "fazenda pública",
+        "municipio", "município", "prefeitura", "câmara municipal", "camara municipal", "ente publico", "ente público"
+    )
+
+    def any_kw(text, kws):
+        return any(k in text for k in kws)
+
+    # Caso 1: ente público → espécie 2.1
+    if any_kw(prom, public_kw) and any_kw(esp, eng_kw):
+        entry = _species_from_id("2.1")
+        if entry:
+            _apply_species_mapping(
+                result,
+                entry.get("DESCRICAO", ""),
+                "heuristica_engenharia_publico",
+                context_text=None,
+                weight=1.2,
+                matched_entry=entry,
+            )
+        return
+
+    if not any_kw(esp, eng_kw):
+        return
+
+    # Palavras-chave mais ricas por espécie (apenas texto, sem tocar em valores)
+    patterns = [
+        (
+            "2.6",
+            (
+                "insalubr", "periculos", "ltcat", "ppra", "pcms", "pgr", "ruido", "ruído",
+                "vibracao", "vibração", "calor", "epi", "epc", "segurança do trabalho", "seguranca do trabalho",
+                "higiene ocupacional"
+            ),
+        ),
+        (
+            "2.3",
+            (
+                "estrutural", "solidez", "estabilidade", "patologia", "patologias", "trinca", "fissura",
+                "segurança estrut", "seguranca estrut", "colapso", "fundacao", "fundação", "pilar", "viga",
+                "vistoria tecnica", "vistoria técnica", "laudo estrut", "reforço estrut", "reforco estrut"
+            ),
+        ),
+        (
+            "2.4",
+            (
+                "fungivel", "fungível", "fungiveis", "fungíveis", "bens moveis", "bens móveis", "maquina",
+                "máquina", "equipamento", "veiculo", "veículo", "inventario de bens", "inventário de bens"
+            ),
+        ),
+        (
+            "2.5",
+            (
+                "demarcat", "demarcacao", "demarcação", "confrontacao", "confrontação", "divisa", "marco",
+                "georrefer", "georreferenciamento", "levantamento topograf", "usucapiao", "usucapião", "perimetral"
+            ),
+        ),
+        (
+            "2.2",
+            (
+                "rural", "fazenda", "sítio", "sitio", "chácara", "chacara", "propriedade rural", "agricola",
+                "agrícola", "agro", "agropecuaria", "agropecuária", "pastagem", "gleba"
+            ),
+        ),
+        (
+            "2.1",
+            (
+                "avalia", "avaliacao", "avaliação", "imóvel", "imovel", "urbano", "apartamento", "casa",
+                "sobrado", "edificio", "edifício", "predio", "prédio", "terreno", "lote", "condominio",
+                "condomínio", "valor venal", "iptu"
+            ),
+        ),
+    ]
+
+    for target_id, kws in patterns:
+        if any_kw(esp, kws):
+            entry = _species_from_id(target_id)
+            if entry:
+                _apply_species_mapping(
+                    result,
+                    entry.get("DESCRICAO", ""),
+                    "heuristica_engenharia_kw",
+                    context_text=None,
+                    weight=0.9,
+                    matched_entry=entry,
+                )
+            return
+
+    # Se nada casar, fica para os demais fallbacks/revisão
 def _ensure_honorarios_completion(result: ExtractionResult) -> None:
     specie = result.data.get("ESPÉCIE DE PERÍCIA")
     if not specie:
@@ -2281,6 +2480,7 @@ def _validate_numeric_fields(result: "ExtractionResult") -> None:
         "VALOR ARBITRADO",
         "VALOR ARBITRADO - DE",
         "VALOR ARBITRADO - CM",
+        "VALOR ARBITRADO - JZ",
         "Valor Tabelado Anexo I - Tabela I",
         "SALDO A RECEBER",
     ]
@@ -2334,7 +2534,7 @@ def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> list[Path]:
         return bad_files
     df_all = pd.concat(dfs, ignore_index=True)
 
-    # Fallback para VALOR ARBITRADO: CM > DE (somente valor monetário)
+    # Fallback para VALOR ARBITRADO: CM > DE > JZ (somente valor monetário)
     money_re = re.compile(r"r\$\s*[0-9]{1,3}(?:\.[0-9]{3})*,?\d{2}", re.IGNORECASE)
 
     def _money(val: str | None) -> str:
@@ -2351,6 +2551,9 @@ def consolidate_parquets(parquet_dir: Path, excel_path: Path) -> list[Path]:
     mask_empty = df_all["VALOR ARBITRADO"].isna() | (df_all["VALOR ARBITRADO"] == "")
     if "VALOR ARBITRADO - DE" in df_all.columns:
         df_all.loc[mask_empty, "VALOR ARBITRADO"] = df_all.loc[mask_empty, "VALOR ARBITRADO - DE"].apply(_money)
+    mask_empty = df_all["VALOR ARBITRADO"].isna() | (df_all["VALOR ARBITRADO"] == "")
+    if "VALOR ARBITRADO - JZ" in df_all.columns:
+        df_all.loc[mask_empty, "VALOR ARBITRADO"] = df_all.loc[mask_empty, "VALOR ARBITRADO - JZ"].apply(_money)
     # Garante colunas e renumera
     for c in COLUMNS:
         if c not in df_all.columns:
