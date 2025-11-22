@@ -805,10 +805,8 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                     weight=1.2,
                     matched_entry=alias_entry,
                 )
-    especie = _extract_especie_from_text(lines, lookup_text)
-    if especie:
-        _apply_species_mapping(res, especie, source_doc, context_text=lookup_text, weight=1.0)
-    elif perito_info.especialidade or perito_info.profissao:
+    # 1) Prioridade: profissão/especialidade do despacho/interessado
+    if not res.data.get("ESPÉCIE DE PERÍCIA") and (perito_info.especialidade or perito_info.profissao):
         alias_entry = _guess_species_from_specialty(perito_info)
         if alias_entry:
             _apply_species_mapping(
@@ -816,11 +814,10 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                 alias_entry.get("DESCRICAO", ""),
                 source_doc,
                 context_text=lookup_text,
-                weight=1.15,
+                weight=1.3,
                 matched_entry=alias_entry,
             )
-    elif res.data.get("ESPECIALIDADE"):
-        # Mapear a partir da especialidade já extraída
+    if not res.data.get("ESPÉCIE DE PERÍCIA") and res.data.get("ESPECIALIDADE"):
         entry = _match_alias(res.data.get("ESPECIALIDADE", ""))
         if entry:
             _apply_species_mapping(
@@ -828,9 +825,15 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                 entry.get("DESCRICAO", res.data.get("ESPECIALIDADE", "")),
                 source_doc,
                 context_text=lookup_text,
-                weight=1.05,
+                weight=1.2,
                 matched_entry=entry,
             )
+
+    # 2) Rótulos no documento (se existir)
+    if not res.data.get("ESPÉCIE DE PERÍCIA"):
+        especie = _extract_especie_from_text(lines, lookup_text)
+        if especie:
+            _apply_species_mapping(res, especie, source_doc, context_text=lookup_text, weight=1.0)
 
     # Fallback por Fator ou Valor Tabelado (menor peso)
     if not res.data.get("ESPÉCIE DE PERÍCIA"):
