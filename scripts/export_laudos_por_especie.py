@@ -12,9 +12,11 @@ import csv
 import json
 import re
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Iterable, Optional
 
+from PyPDF2 import PdfReader
 # Ajuste aqui se quiser usar outro run-id ou outro diretório de ZIPs.
 RUN_ID = "extract-20251121-220053-e5fa0f"
 ZIP_DIR = Path("playwright-downloads")
@@ -88,6 +90,20 @@ def extract_keywords(text: str, keywords: Iterable[str]) -> str:
     return ";".join(sorted(set(found)))
 
 
+def read_doc_text(data: bytes, name: str) -> str:
+    n = name.lower()
+    if n.endswith(".pdf"):
+        try:
+            reader = PdfReader(BytesIO(data))
+            return " ".join(p.extract_text() or "" for p in reader.pages)
+        except Exception:
+            return ""
+    try:
+        return data.decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
 def main():
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -149,4 +165,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

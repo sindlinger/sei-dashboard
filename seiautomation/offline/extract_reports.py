@@ -9,6 +9,8 @@ import re
 import sys
 import unicodedata
 import time
+import zipfile
+from io import BytesIO
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -23,6 +25,11 @@ from openpyxl import Workbook, load_workbook
 from preprocessamento.documents import gather_texts, document_priority
 from preprocessamento.inputs import PreparedInput, resolve_input_paths
 from .doc_classifier import DocumentBucket, classify_document
+
+try:
+    from PyPDF2 import PdfReader
+except Exception:  # PyPDF2 é opcional; funções que precisam lidam com ausência
+    PdfReader = None
 
 _PERITO_CATALOG_PATH = Path("outputs/banco-peritos/peritos_catalogo_final.csv")
 _PERITO_NAME_SET: set[str] | None = None
@@ -1972,6 +1979,102 @@ def _ensure_honorarios_completion(result: ExtractionResult) -> None:
     _apply_species_mapping(result, specie, source, context_text=None, weight=0.7, matched_entry=entry)
 
 
+def _export_sem_especie_evidences(audit_path: Path | None, zip_dir: Path) -> None:
+    """Gera TSV/XLSX com evidências (hits/snippets) dos laudos que ficaram SEM ESPÉCIE."""
+    if not audit_path or not audit_path.exists():
+        return
+    output_base = Path("outputs/laudos_por_especie")
+    output_base.mkdir(parents=True, exist_ok=True)
+    tsv_path = output_base / "laudos_sem_especie_evidencias.tsv"
+    xlsx_path = output_base / "laudos_sem_especie_evidencias.xlsx"
+
+    keywords = [
+        "laudo",
+        "perícia",
+        "pericial",
+        "interdição",
+        "grafotécn",
+        "psicol",
+        "assistente social",
+        "estudo social",
+        "odont",
+        "engenh",
+        "arquit",
+        "dna",
+        "paternidade",
+        "avaliação",
+        "imóvel",
+    ]
+
+    def extract_text(name: str, data: bytes) -> str:
+        if name.lower().endswith(".pdf") and PdfReader:
+            try:
+                reader = PdfReader(BytesIO(data))
+                return " ".join(page.extract_text() or "" for page in reader.pages)
+            except Exception:
+                return ""
+        try:
+            return data.decode("utf-8", errors="ignore")
+        except Exception:
+            return ""
+
+    rows: list[list[str]] = []
+    with audit_path.open() as f:
+        for line in f:
+            rec = json.loads(line)
+            specie = next((fld.get("value") for fld in rec.get("fields", []) if fld.get("field") == "ESPÉCIE DE PERÍCIA"), "")
+            if specie:
+                continue
+            zip_name = rec.get("zip")
+            laudos = [d for d in rec.get("documents", []) if d.get("bucket") == "laudo"]
+            if not laudos:
+                continue
+            zpath = zip_dir / zip_name
+            if not zpath.exists():
+                continue
+            try:
+                with zipfile.ZipFile(zpath) as zf:
+                    names = zf.namelist()
+                    for doc in laudos:
+                        name = doc.get("name", "")
+                        member = name if name in names else next((n for n in names if n.endswith(name)), None)
+                        if not member:
+                            continue
+                        data = zf.read(member)
+                        text = extract_text(name, data)
+                        tlow = text.lower()
+                        hits = [k for k in keywords if k in tlow]
+                        snippet = ""
+                        if hits:
+                            idx = tlow.find(hits[0])
+                            snippet = text[max(0, idx - 60) : idx + 140].replace("\n", " ")
+                        rows.append([zip_name, name, ";".join(hits), snippet])
+            except Exception:
+                continue
+
+    # dedup por (ZIP, DOCUMENTO)
+    seen = set()
+    dedup_rows = []
+    for r in rows:
+        key = (r[0], r[1])
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup_rows.append(r)
+
+    header = ["ZIP", "DOCUMENTO", "HITS", "SNIPPET"]
+    with tsv_path.open("w", encoding="utf-8", newline="") as fo:
+        writer = csv.writer(fo, delimiter="\t", quoting=csv.QUOTE_NONE, escapechar="\\")
+        writer.writerow(header)
+        writer.writerows(dedup_rows)
+
+    try:
+        df = pd.DataFrame(dedup_rows, columns=header)
+        df.to_excel(xlsx_path, index=False)
+    except Exception:
+        pass
+
+
 def _extract_requisition_date_from_docs(docs: List[DocumentText]) -> tuple[str, DocumentText | None]:
     for doc in docs[:3]:
         date = _date_near_cities(doc.text)
@@ -2626,6 +2729,11 @@ def main() -> None:
     consolidate_checkpoint(final=True)
     _finish_progress()
     _log(f"Relatório salvo/atualizado em {output}")
+    if audit_path:
+        try:
+            _export_sem_especie_evidences(audit_path, args.zip_dir)
+        except Exception as exc:  # pragma: no cover - best effort
+            _log(f"Aviso: falha ao gerar evidências de laudos sem espécie: {exc}")
     if bad_files_total:
         _log(f"Aviso final: {len(bad_files_total)} parquet(s) corrompido(s) foram ignorados: {sorted(bad_files_total)}")
 
