@@ -81,6 +81,21 @@ def tag_kind(text: str) -> str:
     return ""
 
 
+# CNJ e variações (CI, ADME) simples: aceitar dígitos, ., /, - com 15+ chars
+CNJ_PATTERN = re.compile(r"\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}")
+ADMIN_PATTERN = re.compile(r"\d{4,}\.\d{3,}|\d{7,}")
+
+
+def guess_process_number(text: str) -> str:
+    m = CNJ_PATTERN.search(text)
+    if m:
+        return m.group(0)
+    m = ADMIN_PATTERN.search(text)
+    if m:
+        return m.group(0)
+    return "UNKNOWN"
+
+
 def write_subpdf(src_reader: PdfReader, start: int, end: int, output_path: Path) -> None:
     writer = PdfWriter()
     for i in range(start, end):
@@ -90,7 +105,13 @@ def write_subpdf(src_reader: PdfReader, start: int, end: int, output_path: Path)
         writer.write(f)
 
 
-def process_pdf(pdf_path: Path, out_dir: Path, writer_rows: list) -> None:
+def write_text(pages_text: List[str], start: int, end: int, output_path: Path) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    text = "\n".join(pages_text[start:end])
+    output_path.write_text(text, encoding="utf-8")
+
+
+def process_pdf(pdf_path: Path, out_dir: Path, writer_rows: list, emit_txt: bool) -> None:
     page_texts = extract_page_texts(pdf_path)
     splits = split_pages_by_doc_id(page_texts)
     src_reader = PdfReader(str(pdf_path))
@@ -98,9 +119,14 @@ def process_pdf(pdf_path: Path, out_dir: Path, writer_rows: list) -> None:
         pages_text = "\n".join(page_texts[start:end])
         bucket = classify_document(pdf_path.name, pages_text).value
         tag = tag_kind(pages_text)
+        procnum = guess_process_number(pages_text)
+        out_base = out_dir / procnum / bucket
         out_name = f"{pdf_path.stem}_doc{doc_id:02d}.pdf"
-        out_path = out_dir / bucket / out_name
+        out_path = out_base / out_name
         write_subpdf(src_reader, start, end, out_path)
+        if emit_txt:
+            txt_path = out_path.with_suffix(".txt")
+            write_text(page_texts, start, end, txt_path)
         writer_rows.append(
             {
                 "original_pdf": str(pdf_path),
@@ -108,6 +134,7 @@ def process_pdf(pdf_path: Path, out_dir: Path, writer_rows: list) -> None:
                 "output_pdf": str(out_path),
                 "bucket": bucket,
                 "tag": tag,
+                "process": procnum,
                 "pages": end - start,
             }
         )
@@ -117,6 +144,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Split multi-document PDFs and classify buckets.")
     parser.add_argument("--input-dir", required=True, type=Path, help="Diretório com PDFs de entrada.")
     parser.add_argument("--output-dir", required=True, type=Path, help="Diretório para salvar PDFs separados.")
+    parser.add_argument("--emit-txt", action="store_true", help="Salvar também .txt com o texto extraído.")
     args = parser.parse_args()
 
     pdfs = sorted(p for p in args.input_dir.glob("**/*.pdf"))
@@ -125,13 +153,13 @@ def main() -> None:
 
     rows: list = []
     for pdf in pdfs:
-        process_pdf(pdf, args.output_dir, rows)
+        process_pdf(pdf, args.output_dir, rows, emit_txt=args.emit_txt)
 
     index_path = args.output_dir / "split_index.csv"
     index_path.parent.mkdir(parents=True, exist_ok=True)
     with index_path.open("w", newline="", encoding="utf-8") as fo:
         writer = csv.DictWriter(
-            fo, fieldnames=["original_pdf", "doc_id", "output_pdf", "bucket", "tag", "pages"]
+            fo, fieldnames=["original_pdf", "doc_id", "output_pdf", "bucket", "tag", "process", "pages"]
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -140,4 +168,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
