@@ -740,8 +740,7 @@ def _document_importance(name: str, text: str) -> int:
 
 def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionResult:
     res = ExtractionResult(data={})
-    primary = text or combined
-    lookup_text = primary if primary else combined
+    lookup_text = text  # combinado não é mais usado
     if not lookup_text:
         res.observations.append("Sem texto legível no ZIP")
         return res
@@ -1775,7 +1774,7 @@ def process_zip(zip_path: Path) -> ExtractionResult:
     expected_sei, expected_display = _expected_sei_numbers(zip_path.name)
     context = ProcessContext(expected_sei=expected_sei, expected_sei_display=expected_display)
     result = ExtractionResult()
-    if not documents and not combined:
+    if not documents:
         result.observations.append("Nenhum documento legível no ZIP")
         return result
 
@@ -1810,13 +1809,9 @@ def process_zip(zip_path: Path) -> ExtractionResult:
             result.observations.append("Nenhum documento legível no ZIP")
 
     fallback_text = "\n".join(accepted_texts)
-    if not result.data.get("PROCESSO Nº"):
-        if fallback_text:
-            fallback = extract_from_text(fallback_text, fallback_text, "combined")
-            result.update_from(fallback, "combined")
-        elif not context.accepted_docs and not context.expected_sei and combined:
-            fallback = extract_from_text(combined, combined, "combined")
-            result.update_from(fallback, "combined")
+    if not result.data.get("PROCESSO Nº") and fallback_text:
+        fallback = extract_from_text(fallback_text, fallback_text, "combined")
+        result.update_from(fallback, "combined")
 
     if context.skipped_docs and context.accepted_docs:
         skipped = ", ".join(context.skipped_docs[:3])
@@ -1832,7 +1827,7 @@ def process_zip(zip_path: Path) -> ExtractionResult:
     _fill_requisition_date(result, context)
     _fill_species_from_laudos(result, context.accepted_docs)
     _ensure_honorarios_completion(result)
-    text_for_validation = "\n".join(accepted_texts) or combined
+    text_for_validation = "\n".join(accepted_texts)
     _validate_result(result, context, zip_path.name, text_for_validation)
 
     if not sources:

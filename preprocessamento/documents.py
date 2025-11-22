@@ -174,5 +174,4 @@ def gather_texts(zip_path: Path) -> tuple[list[dict[str, str]], str]:
             bucket = classify_document(name, text)
             sources.append({"name": name, "text": text, "bucket": bucket})
     sources.sort(key=lambda s: document_priority(s["name"], s["text"]))
-    combined = "\n".join(src["text"] for src in sources)
-    return sources, combined
+    return sources, ""  # combined removido
