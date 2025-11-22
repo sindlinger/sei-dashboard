@@ -836,8 +836,9 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                 matched_entry=entry,
             )
 
-    # 2) Rótulos no documento (se existir)
-    if not res.data.get("ESPÉCIE DE PERÍCIA"):
+    # 2) Rótulos de espécie/natureza no documento (desativado a pedido)
+    allow_label_species = False
+    if allow_label_species and not res.data.get("ESPÉCIE DE PERÍCIA"):
         especie = _extract_especie_from_text(lines, lookup_text)
         if especie:
             _apply_species_mapping(res, especie, source_doc, context_text=lookup_text, weight=1.0)
@@ -2018,6 +2019,12 @@ def _export_sem_especie_evidences(audit_path: Path | None, zip_dir: Path) -> Non
         except Exception:
             return ""
 
+    def clean_text(text: str) -> str:
+        text = html.unescape(text)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = " ".join(text.split())
+        return text
+
     rows: list[list[str]] = []
     with audit_path.open() as f:
         for line in f:
@@ -2042,6 +2049,7 @@ def _export_sem_especie_evidences(audit_path: Path | None, zip_dir: Path) -> Non
                             continue
                         data = zf.read(member)
                         text = extract_text(name, data)
+                        text = clean_text(text)
                         tlow = text.lower()
                         hits = [k for k in keywords if k in tlow]
                         snippet = ""
