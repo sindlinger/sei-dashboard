@@ -1370,7 +1370,7 @@ NOISE_SPECIE_PATTERNS = [
         r"^\d{1,2}/\d{1,2}/\d{2,4}",
         r"presta[cç][aã]o de servi[cç]o",
         r"^a ser realizada",
-        r"realizado o ato",
+        r"^[\\s\\u00a0]*realizado o ato",
         r"^\.$",
         r"^,$",
     ]
