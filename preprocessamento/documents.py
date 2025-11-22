@@ -128,9 +128,52 @@ def document_priority(name: str, text: str) -> Tuple[int, int]:
     return score, len(text) * -1
 
 
-def gather_texts(zip_path: Path) -> tuple[list[dict[str, str]], str]:
+def _read_txt_file(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1", errors="ignore")
+
+
+def gather_texts(path: Path) -> tuple[list[dict[str, str]], str]:
     sources: list[dict[str, str]] = []
-    with zipfile.ZipFile(zip_path) as zf:
+    suffix = path.suffix.lower()
+
+    # PDF solto
+    if suffix == ".pdf":
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            return [], ""
+        split_docs = split_combined_pdf(raw, path.name)
+        if split_docs:
+            sources.extend(split_docs)
+            sources.sort(key=lambda s: document_priority(s["name"], s["text"]))
+            return sources, ""
+        # fallback: tentar texto simples
+        try:
+            text = pdf_to_text(raw)
+        except Exception:
+            return [], ""
+        bucket = classify_document(path.name, text)
+        sources.append({"name": path.name, "text": text, "bucket": bucket})
+        sources.sort(key=lambda s: document_priority(s["name"], s["text"]))
+        return sources, ""
+
+    # TXT solto
+    if suffix == ".txt":
+        try:
+            text = _read_txt_file(path)
+        except OSError:
+            return [], ""
+        if text:
+            bucket = classify_document(path.name, text)
+            sources.append({"name": path.name, "text": text, "bucket": bucket})
+        sources.sort(key=lambda s: document_priority(s["name"], s["text"]))
+        return sources, ""
+
+    # ZIP (fluxo original)
+    with zipfile.ZipFile(path) as zf:
         entries = [info for info in zf.infolist() if not info.is_dir()]
         if len(entries) == 1:
             single = entries[0]

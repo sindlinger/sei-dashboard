@@ -43,13 +43,13 @@ def resolve_input_paths(
 
     for path in ordered:
         suffix = path.suffix.lower()
-        if suffix in {".pdf", ".txt"}:
-            if tmp_dir is None:
-                tmp_dir = TemporaryDirectory()
-            packed = _pack_single_file(path, tmp_dir)
-            kind = suffix.lstrip(".") or "pdf"
-            prepared.append(PreparedInput(original=path, resolved=packed, kind=kind))
-        else:
+        if suffix == ".zip":
             prepared.append(PreparedInput(original=path, resolved=path, kind="zip"))
+        elif suffix in {".pdf", ".txt"}:
+            kind = suffix.lstrip(".") or "pdf"
+            prepared.append(PreparedInput(original=path, resolved=path, kind=kind))
+        else:
+            # formato não suportado; apenas ignore
+            continue
 
     return prepared, tmp_dir
