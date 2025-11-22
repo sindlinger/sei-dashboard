@@ -782,9 +782,9 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
     if perito_info.documento:
         _set_field(res, "CPF/CNPJ", perito_info.documento, source_doc, pattern="perito_info", context_text=lookup_text)
     if perito_info.especialidade:
-        _set_field(res, "ESPECIALIDADE", perito_info.especialidade, source_doc, pattern="perito_info", context_text=lookup_text)
+        _set_field(res, "ESPECIALIDADE", perito_info.especialidade, source_doc, pattern="perito_info", context_text=lookup_text, weight=1.1)
     else:
-        _set_field(res, "ESPECIALIDADE", _line_value(lines, ESPECIALIDADE_LABELS), source_doc, pattern="especialidade_labels", context_text=lookup_text, weight=0.9)
+        _set_field(res, "ESPECIALIDADE", _line_value(lines, ESPECIALIDADE_LABELS), source_doc, pattern="especialidade_labels", context_text=lookup_text, weight=0.95)
 
     # Interessado: Nome – Perito(a) Profissão – email (se existir)
     if not perito_info.nome or not res.data.get("ESPECIALIDADE"):
@@ -792,7 +792,7 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
         if int_info.nome and not res.data.get("PERITO"):
             _set_field(res, "PERITO", int_info.nome, source_doc, pattern="interessado", context_text=lookup_text, weight=0.85)
         if int_info.especialidade and not res.data.get("ESPECIALIDADE"):
-            _set_field(res, "ESPECIALIDADE", int_info.especialidade, source_doc, pattern="interessado", context_text=lookup_text, weight=0.85)
+            _set_field(res, "ESPECIALIDADE", int_info.especialidade, source_doc, pattern="interessado", context_text=lookup_text, weight=1.15)
         # usar especialidade para sugerir espécie
         if int_info.especialidade and not res.data.get("ESPÉCIE DE PERÍCIA"):
             alias_entry = _match_alias(int_info.especialidade)
@@ -802,7 +802,7 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                     alias_entry.get("DESCRICAO", int_info.especialidade),
                     source_doc,
                     context_text=lookup_text,
-                    weight=0.8,
+                    weight=1.2,
                     matched_entry=alias_entry,
                 )
     especie = _extract_especie_from_text(lines, lookup_text)
@@ -816,7 +816,7 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                 alias_entry.get("DESCRICAO", ""),
                 source_doc,
                 context_text=lookup_text,
-                weight=0.7,
+                weight=1.15,
                 matched_entry=alias_entry,
             )
     elif res.data.get("ESPECIALIDADE"):
@@ -828,7 +828,20 @@ def extract_from_text(text: str, combined: str, source_doc: str) -> ExtractionRe
                 entry.get("DESCRICAO", res.data.get("ESPECIALIDADE", "")),
                 source_doc,
                 context_text=lookup_text,
-                weight=0.65,
+                weight=1.05,
+                matched_entry=entry,
+            )
+
+    # Fallback por Fator ou Valor Tabelado (menor peso)
+    if not res.data.get("ESPÉCIE DE PERÍCIA"):
+        entry = _guess_species_from_values(res)
+        if entry:
+            _apply_species_mapping(
+                res,
+                entry.get("DESCRICAO", ""),
+                source_doc,
+                context_text=lookup_text,
+                weight=0.8,
                 matched_entry=entry,
             )
 
@@ -1296,6 +1309,25 @@ def _guess_species_from_specialty(info: PeritoInfo) -> dict[str, str] | None:
     return None
 
 
+def _guess_species_from_values(result: ExtractionResult) -> dict[str, str] | None:
+    """Usa Fator ou Valor Tabelado para inferir espécie."""
+    fator = result.data.get("Fator")
+    if fator:
+        entry = _species_from_id(str(fator))
+        if entry:
+            return entry
+    val = result.data.get("Valor Tabelado Anexo I - Tabela I")
+    num = _parse_currency_value(val) if val else None
+    if num is not None and HONORARIOS_TABLE:
+        matches = [
+            row for row in HONORARIOS_TABLE
+            if _parse_currency_value(row.get("VALOR")) == num
+        ]
+        if len(matches) == 1:
+            return matches[0]
+    return None
+
+
 def _match_honorarios_entry(label: str) -> dict[str, str] | None:
     if not label or not HONORARIOS_INDEX:
         return None
@@ -1330,8 +1362,13 @@ NOISE_SPECIE_PATTERNS = [
     for p in [
         r"^\(\s*\)\s*tradu[cç][aã]o",
         r"^\(\s*\)\s*interpreta[cç][aã]o",
+        r"^\(\s*\)\s*tradu.*inter.*per[ií]cia",
+        r"^\d{1,2}/\d{1,2}/\d{2,4}.*presta[cç][aã]o de servi[cç]os",
         r"^\d{1,2}/\d{1,2}/\d{2,4}",
+        r"presta[cç][aã]o de servi[cç]o",
+        r"^a ser realizada",
         r"^\.$",
+        r"^,$",
     ]
 ]
 
@@ -1356,10 +1393,25 @@ def _species_from_id(target_id: str) -> dict[str, str] | None:
 def _format_currency_value(value: str | float) -> str:
     if isinstance(value, str):
         try:
-            value = float(value.replace(",", "."))
+            value = float(value.replace(".", "").replace(",", "."))
         except Exception:
             return ""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _parse_currency_value(value: str | float) -> float | None:
+    """Converte 'R$ 1.234,56' ou '1234,56' para float."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value)
+    text = re.sub(r"[Rr]\\$\\s*", "", text)
+    text = text.replace(".", "").replace(",", ".")
+    try:
+        return float(text)
+    except Exception:
+        return None
 
 
 def _classify_arbitration_doc(source_doc: str, context_text: str | None) -> str:
@@ -1450,7 +1502,7 @@ def _apply_species_mapping(
     if not especie:
         return
 
-    especie_clean = especie.strip(" \t-–:;")
+    especie_clean = _clean_especie_candidate(especie)
     if not especie_clean:
         return
 
