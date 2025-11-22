@@ -9,6 +9,8 @@ grepo/
 logs/
 outputs/reports/parquet/
 outputs/reports/*.xlsx
+# Ignore all generated outputs (zips, PDFs, images, reports)
+outputs/
 ml/.venv/
 ml/datasets/
 ml/models/
