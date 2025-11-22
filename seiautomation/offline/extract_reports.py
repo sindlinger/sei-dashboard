@@ -1985,7 +1985,7 @@ def _export_sem_especie_evidences(audit_path: Path | None, zip_dir: Path) -> Non
         return
     output_base = Path("outputs/laudos_por_especie")
     output_base.mkdir(parents=True, exist_ok=True)
-    tsv_path = output_base / "laudos_sem_especie_evidencias.tsv"
+    csv_path = output_base / "laudos_sem_especie_evidencias.csv"
     xlsx_path = output_base / "laudos_sem_especie_evidencias.xlsx"
 
     keywords = [
@@ -2063,11 +2063,13 @@ def _export_sem_especie_evidences(audit_path: Path | None, zip_dir: Path) -> Non
         dedup_rows.append(r)
 
     header = ["ZIP", "DOCUMENTO", "HITS", "SNIPPET"]
-    with tsv_path.open("w", encoding="utf-8", newline="") as fo:
-        writer = csv.writer(fo, delimiter="\t", quoting=csv.QUOTE_NONE, escapechar="\\")
+    # CSV legível (separador vírgula)
+    with csv_path.open("w", encoding="utf-8", newline="") as fo:
+        writer = csv.writer(fo, delimiter=",", quoting=csv.QUOTE_MINIMAL)
         writer.writerow(header)
         writer.writerows(dedup_rows)
 
+    # XLSX para abrir direto
     try:
         df = pd.DataFrame(dedup_rows, columns=header)
         df.to_excel(xlsx_path, index=False)
