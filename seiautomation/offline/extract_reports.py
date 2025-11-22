@@ -1370,7 +1370,6 @@ NOISE_SPECIE_PATTERNS = [
         r"^\d{1,2}/\d{1,2}/\d{2,4}",
         r"presta[cç][aã]o de servi[cç]o",
         r"^a ser realizada",
-        r"^[\\s\\u00a0]*realizado o ato",
         r"^\.$",
         r"^,$",
     ]
@@ -1397,6 +1396,8 @@ def _clean_especie_candidate(value: str) -> str:
     for pat in NOISE_SPECIE_PATTERNS:
         if pat.match(v):
             return ""
+    if "realizado o ato" in v.lower():
+        return ""
     if len(v) < 4:
         return ""
     if not _looks_like_species(v):
