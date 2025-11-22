@@ -24,10 +24,16 @@ import argparse
 import csv
 import re
 from pathlib import Path
+import sys
 from typing import List, Tuple
 
 import pdfplumber
 from PyPDF2 import PdfReader, PdfWriter
+
+# Ensure repo root is on sys.path when run as a standalone script
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from preprocessamento.documents import _extract_pdf_doc_number
 from seiautomation.offline.doc_classifier import classify_document
