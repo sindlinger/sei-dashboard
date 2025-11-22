@@ -1372,6 +1372,18 @@ NOISE_SPECIE_PATTERNS = [
     ]
 ]
 
+ALLOWED_SPECIE_KEYWORDS = [
+    "peric", "laudo", "estudo social", "psicolog", "assistente social",
+    "engenh", "arquit", "médic", "medic", "odont", "grafot", "contab",
+    "avalia", "insalubr", "salubr", "demarca", "topograf", "ambient",
+    "criminal", "balíst", "balist"
+]
+
+
+def _looks_like_species(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in ALLOWED_SPECIE_KEYWORDS)
+
 
 def _clean_especie_candidate(value: str) -> str:
     if not value:
@@ -1381,6 +1393,10 @@ def _clean_especie_candidate(value: str) -> str:
     for pat in NOISE_SPECIE_PATTERNS:
         if pat.match(v):
             return ""
+    if len(v) < 4:
+        return ""
+    if not _looks_like_species(v):
+        return ""
     return v
 
 
